@@ -409,8 +409,19 @@ fn sync_partners(vhash:&str, self_dom:&str)->Vec<String>{
 pub fn run()->anyhow::Result<()>{
     use std::sync::{Arc,Mutex};
     use std::collections::{VecDeque,HashSet};
-    let cookies=load();
-    if cookies.is_empty(){ eprintln!("no data/cookies_detail.tsv — run --enrich first"); return Ok(()); }
+    let mut cookies=load();
+    // first run: if the metadata file doesn't exist yet, analyze cookies automatically
+    if !std::path::Path::new("data/cookies_detail.tsv").exists() {
+        eprintln!("[panopticon] first run — analyzing your cookies...");
+        let _=std::process::Command::new(std::env::current_exe().unwrap_or_else(|_|"panopticon".into()))
+            .arg("--enrich").status();
+        cookies=load();  // reload after enrich
+    }
+    if cookies.is_empty(){
+        eprintln!("[panopticon] no cookies found — is Firefox installed with a profile?");
+        eprintln!("  (Panopticon reads ~/.config/mozilla/firefox or ~/.mozilla/firefox)");
+        return Ok(());
+    }
 
     let flows=Arc::new(Mutex::new(VecDeque::new()));
     let live_orgs=Arc::new(Mutex::new(HashSet::new()));
