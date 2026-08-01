@@ -1,0 +1,24 @@
+# ── Runtime data — YOUR browsing history & cookie metadata. Never commit. ──
+# Stepwise: ignore everything in data/, but SHIP the static PSL reference file.
+/data/*
+!/data/static/
+/data/static/*
+!/data/static/trackers_override.tsv
+
+# Logs & runtime TSVs live under data/ (covered above). These catch any that escape:
+/dns.log
+/flows.log
+/*.log
+
+# ── Build artifacts ──
+/target/
+crates/*/target/
+crates/ebpf/target/
+
+# ── Editor / OS noise ──
+*.swp
+*~
+.DS_Store
+
+# ── Sockets ──
+*.sock

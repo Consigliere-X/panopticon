@@ -1,0 +1,38 @@
+// Shared event schema + socket path resolution for daemon<->tui streaming.
+use serde::{Serialize, Deserialize};
+
+pub const SOCK_ENV: &str = "PANOPTICON_SOCK";
+// Server side: where to BIND. Prefer /run if we can create there, else project-local.
+pub fn sock_bind_path() -> String {
+    if let Ok(p) = std::env::var(SOCK_ENV) { return p; }
+    if std::fs::OpenOptions::new().write(true).create(true).open("/run/.pano_test")
+        .map(|_| { std::fs::remove_file("/run/.pano_test").ok(); true }).unwrap_or(false) {
+        return "/run/panopticon.sock".into();
+    }
+    "data/panopticon.sock".into()
+}
+
+// Client side: CONNECT to whichever socket actually exists.
+pub fn sock_path() -> String {
+    if let Ok(p) = std::env::var(SOCK_ENV) { return p; }
+    for cand in ["/run/panopticon.sock", "data/panopticon.sock"] {
+        if std::os::unix::net::UnixStream::connect(cand).is_ok() { return cand.into(); }
+        // exists as a socket file even if a probe connect raced?
+        if std::fs::metadata(cand).map(|m|
+            std::os::unix::fs::FileTypeExt::is_socket(&m.file_type())).unwrap_or(false) {
+            return cand.into();
+        }
+    }
+    "/run/panopticon.sock".into()
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FlowEvent {
+    pub comm: String,
+    pub pid: u32,
+    pub pkg: String,
+    pub ip: String,
+    pub port: u16,
+    pub host: String,
+    pub org: Option<String>,   // ASN-resolved owner, if known
+}

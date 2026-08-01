@@ -1,0 +1,21 @@
+[package]
+name = "panopticon-ebpf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aya-ebpf = "0.1"
+
+[[bin]]
+name = "panopticon-ebpf"
+path = "src/main.rs"
+
+[profile.dev]
+panic = "abort"
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = 3
+debug = false
+
+[workspace]
