@@ -1,7 +1,7 @@
 use crossterm::{event::{self, Event, KeyCode, KeyModifiers}, terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}};
 use ratatui::{prelude::*, widgets::*, text::Text};
-use std::{collections::{BTreeMap, HashMap, HashSet}, fs, io, time::Duration};
+use std::{collections::{HashMap, HashSet}, fs, io, time::Duration};
 
 // ---------- data model ----------
 #[derive(Clone)]
@@ -561,16 +561,16 @@ pub fn run()->anyhow::Result<()>{
                     KeyCode::Char('K') if app.expanded=>{ app.detail_scroll=app.detail_scroll.saturating_sub(1); }
                     KeyCode::Enter=>{
                         if app.tab.idx()==Tab::SyncGraph.idx() {
-                            app.expanded=!app.expanded;
+                            app.expanded = !app.expanded;
                         } else if app.drill.is_some(){
-                            app.expanded=!app.expanded;
+                            app.expanded = !app.expanded;
                         } else {
                             match app.tab{
                                 Tab::Sites=>{ let s=app.sites(); if let Some((dom,_,_,_))=s.get(app.sel){
                                     app.drill=Some(dom.clone()); app.sel=0; app.voff=0; app.expanded=false; } }
                                 Tab::Overview=>{ let t=app.trackers(); if let Some(row)=t.get(app.sel){
                                     app.drill=Some(row.org.clone()); app.sel=0; app.voff=0; app.expanded=false; } }
-                                _=>app.expanded=!app.expanded,
+                                _=>app.expanded = !app.expanded,
                             }
                         }
                     }

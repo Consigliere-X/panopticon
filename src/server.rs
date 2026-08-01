@@ -1,4 +1,4 @@
-use crate::wire::{sock_path, FlowEvent};
+use crate::wire::FlowEvent;
 use std::collections::HashMap as RevCache;
 
 // PTR reverse-DNS lookup with an in-memory cache. Fills hostnames that
@@ -8,9 +8,9 @@ fn reverse_dns(ip: &str, cache: &Mutex<RevCache<String,String>>) -> Option<Strin
         return if hit.is_empty(){None}else{Some(hit.clone())};
     }
     // getnameinfo via std: resolve the socket addr back to a host
-    use std::net::{IpAddr, ToSocketAddrs};
+    use std::net::IpAddr;
     let parsed: Option<IpAddr> = ip.parse().ok();
-    let name = parsed.and_then(|addr|{
+    let name = parsed.and_then(|_addr|{
         // dns_lookup crate would be cleaner; use a shell to `getent hosts` as a portable PTR
         std::process::Command::new("timeout").args(["1","getent","hosts", ip]).output().ok()
             .filter(|o|o.status.success())
@@ -26,7 +26,7 @@ fn reverse_dns(ip: &str, cache: &Mutex<RevCache<String,String>>) -> Option<Strin
     cache.lock().unwrap().insert(ip.to_string(), name.clone().unwrap_or_default());
     name
 }
-use std::{collections::HashMap, fs, io::Write, net::{Ipv4Addr, Ipv6Addr},
+use std::{fs, io::Write,
           os::unix::net::{UnixListener, UnixStream}, sync::{Arc, Mutex}, thread};
 
 type Clients = Arc<Mutex<Vec<UnixStream>>>;

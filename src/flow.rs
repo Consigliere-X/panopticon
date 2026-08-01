@@ -1,6 +1,6 @@
 fn ipport_ip(s:&str)->String{ s.rsplit_once(':').map(|(i,_)|i.to_string()).unwrap_or(s.to_string()) }
 use aya::{maps::RingBuf, programs::KProbe, Ebpf};
-use std::{collections::HashMap, fs, io::Write, net::{Ipv4Addr, Ipv6Addr},
+use std::{collections::HashMap, fs, net::{Ipv4Addr, Ipv6Addr},
           process::Command, thread, time::Duration};
 
 #[repr(C)]
@@ -41,7 +41,7 @@ pub fn run() -> anyhow::Result<()> {
     let mut ring = RingBuf::try_from(bpf.take_map("EVENTS").unwrap())?;
     let mut dns = dns_cache();
     let mut pkgs = HashMap::new();
-    let mut log = fs::OpenOptions::new().create(true).append(true).open("data/flows.log")?;
+    let _log = fs::OpenOptions::new().create(true).append(true).open("data/flows.log")?;
     let sz = std::mem::size_of::<ConnEvent>();
 
     loop {

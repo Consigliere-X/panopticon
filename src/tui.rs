@@ -96,7 +96,7 @@ pub fn run() -> anyhow::Result<()> {
                 let (la,lb)=(st.live.contains_key(a.0), st.live.contains_key(b.0));
                 lb.cmp(&la).then(b.1.cmp(a.1))
             });
-            let mut rows: Vec<Row> = ordered.iter().map(|&(org, n)| {
+            let rows: Vec<Row> = ordered.iter().map(|&(org, n)| {
                 let is_live = st.live.contains_key(org);
                 let (flag, col) = if is_live { ("⚡ ACTIVE", Color::Red) }
                                   else { ("· dormant", Color::DarkGray) };
