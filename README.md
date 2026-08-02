@@ -99,7 +99,7 @@ Panopticon is a privacy tool, so it holds itself to a privacy standard. See
 ## Install
 
 **Requirements:** Linux, a recent Rust toolchain, Python 3 (for setup), and
-Firefox. eBPF flow capture needs a recent kernel.
+**Firefox** (see Browser Support below). eBPF flow capture needs a recent kernel.
 
 ```bash
 git clone https://github.com/Consigliere-X/panopticon
@@ -107,6 +107,14 @@ cd panopticon
 ./fetch-data.sh          # fetch reference datasets (PSL, tracker map, ASN)
 cargo build --release
 ```
+
+### Browser support
+
+Panopticon currently reads **Firefox** cookies only. Chromium/Chrome support is
+planned but not yet implemented: Chromium encrypts cookie values with an OS-keyring
+key, so reading them requires keyring decryption that isn't in place yet. On
+Chromium the value-based features (PII detection, sync, decode) wouldn't work, so
+it's Firefox-only for now. Contributions toward Chromium support are welcome.
 
 ---
 
