@@ -29,8 +29,6 @@ Panopticon presents everything in a seven-tab terminal interface:
   each company sees), whether they're active now, and what data they collect.
 
   ![Overview tab](docs/overview.png)
-
-  ![Overview tab](docs/overview.png)
 - **Sites** — every site setting cookies, ranked by how many trackers it hosts.
 - **Cookies** — every cookie, with category, entropy (is it a tracking ID?),
   and SameSite flag (can it follow you cross-site?). Filter by category or a
@@ -39,8 +37,6 @@ Panopticon presents everything in a seven-tab terminal interface:
 - **Sync Graph** — when the same hidden ID appears on multiple sites, a broker
   (Criteo, Google, …) can merge your activity. Shown as a hub-and-spoke map
   with the broker named and the linked sites listed.
-
-  ![Sync Graph tab](docs/sync-graph.png)
 
   ![Sync Graph tab](docs/sync-graph.png)
 - **Flows** — live outbound network connections, each destination's owning
