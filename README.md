@@ -11,9 +11,9 @@
 
 **See what trackers, cookies, and data brokers know about you — locally, in your terminal.**
 
-![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)
-![Platform: Linux](https://img.shields.io/badge/platform-linux-lightgrey.svg)
+<img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
+<img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust">
+<img src="https://img.shields.io/badge/platform-linux-lightgrey.svg" alt="Platform: Linux">
 
 </div>
 
