@@ -1,4 +1,21 @@
-# Panopticon
+<div align="center">
+
+```
+██████╗  █████╗ ███╗   ██╗ ██████╗ ██████╗ ████████╗██╗ ██████╗ ██████╗ ███╗   ██╗
+██╔══██╗██╔══██╗████╗  ██║██╔═══██╗██╔══██╗══██╔══╝██║██╔════╝██╔═══██╗████╗  ██║
+██████╔╝███████║██╔██╗ ██║██║   ██║██████╔╝   ██║   ██║██║     ██║   ██║██╔██╗ ██║
+██╔═══╝ ██╔══██║██║╚██╗██║██║   ██║██╔═══╝    ██║   ██║██║     ██║   ██║██║╚██╗██║
+██║     ██║  ██║██║ ╚████║╚██████╔╝██║        ██║   ██║╚██████╗╚██████╔╝██║ ╚████║
+╚═╝     ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝        ╚═╝   ╚═╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝
+```
+
+**See what trackers, cookies, and data brokers know about you — locally, in your terminal.**
+
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)
+![Platform: Linux](https://img.shields.io/badge/platform-linux-lightgrey.svg)
+
+</div>
 
 **A local privacy observatory.** Panopticon shows you what the websites you
 visit actually store about you, who they send your data to, and how tracking
