@@ -13,6 +13,12 @@ companies are quietly building a combined profile of everything you do.
 > **Panopticon is a tool for auditing your _own_ privacy.** See
 > [Responsible Use](#responsible-use) before running it.
 
+![Panopticon — Personal Data tab](docs/personal-data.png)
+
+*Panopticon found this personal data sitting in plaintext in browser cookies —
+email, name, location, and device IDs — and exactly which sites hold it.
+(Values redacted in this screenshot; on your own machine they're shown in full.)*
+
 ---
 
 ## What it shows you
@@ -21,6 +27,10 @@ Panopticon presents everything in a seven-tab terminal interface:
 
 - **Overview** — who is tracking you, ranked by reach (what % of your browsing
   each company sees), whether they're active now, and what data they collect.
+
+  ![Overview tab](docs/overview.png)
+
+  ![Overview tab](docs/overview.png)
 - **Sites** — every site setting cookies, ranked by how many trackers it hosts.
 - **Cookies** — every cookie, with category, entropy (is it a tracking ID?),
   and SameSite flag (can it follow you cross-site?). Filter by category or a
@@ -29,6 +39,10 @@ Panopticon presents everything in a seven-tab terminal interface:
 - **Sync Graph** — when the same hidden ID appears on multiple sites, a broker
   (Criteo, Google, …) can merge your activity. Shown as a hub-and-spoke map
   with the broker named and the linked sites listed.
+
+  ![Sync Graph tab](docs/sync-graph.png)
+
+  ![Sync Graph tab](docs/sync-graph.png)
 - **Flows** — live outbound network connections, each destination's owning
   company resolved via a full ASN database (works even under encrypted DNS).
 - **Personal Data** — your actual identity found in cookie values: email, name,
