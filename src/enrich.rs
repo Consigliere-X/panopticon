@@ -196,8 +196,9 @@ pub fn run()->anyhow::Result<()>{
     let mut val_meta:HashMap<String,(String,String)>=HashMap::new(); // hash -> (cookie_name, org)
     let mut val_preview:HashMap<String,String>=HashMap::new(); // hash -> full shared value
     let mut val_detail:HashMap<String,(String,f64)>=HashMap::new(); // hash -> (host, entropy)
-    let mut rows:Vec<(String,String,String,i64,i32,f64,String,String,String)>=vec![]; // +value +detect
+    let mut rows:Vec<(String,String,String,i64,i32,f64,String,String,String,String)>=vec![]; // +value +detect +browser
 
+    let mut raw:Vec<(String,String,String,i64,i32,String)>=vec![];
     for db in find_ff(){
         let uri=format!("file:{}?immutable=1",db.display());
         let conn=match Connection::open_with_flags(&uri,
@@ -208,41 +209,65 @@ pub fn run()->anyhow::Result<()>{
             r.get::<_,String>(2).unwrap_or_default(),r.get::<_,i64>(3).unwrap_or(0),
             r.get::<_,i32>(4).unwrap_or(-1)))).map(|x|x.filter_map(|y|y.ok()).collect::<Vec<_>>())
             .unwrap_or_default();
-        for (host,name,value,exp,ss) in it {
-            let e=entropy(&value);
-            let vh=if value.len()>=10 && e>=3.0 {
-                let mut h=Sha256::new(); h.update(value.as_bytes());
-                let hh=format!("{:x}",h.finalize());
-                val_hosts.entry(hh.clone()).or_default().insert(etld1_psl(&host, &psl));
-                val_preview.entry(hh.clone()).or_insert_with(|| value.clone());
-                val_detail.entry(hh.clone()).or_insert((host.clone(), e));
-                let host_dom=etld1_psl(&host, &psl);
-                let host_bare=host.trim_start_matches('.').to_string();
-                let org = trackers.get(&host_bare)
-                    .or_else(||trackers.get(&host_dom))
-                    .cloned().unwrap_or_else(||{
-                    // fallback: cookie-name heuristic
-                    if name.starts_with("_cc_id")||name.starts_with("cto_")||name.starts_with("_pubcid"){"Criteo".into()}
-                    else if name.starts_with("unifiedid"){"TradeDesk".into()}
-                    else if name.starts_with("_ga")||name.starts_with("_gcl")||name=="NID"||name=="IDE"{"Google".into()}
-                    else if name.starts_with("_fbp")||name=="fr"{"Meta".into()}
-                    else if name.starts_with("MUID")||name.starts_with("_uet"){"Microsoft".into()}
-                    else {"unknown-broker".into()}
-                });
-                val_meta.entry(hh.clone()).or_insert_with(|| (name.clone(), org.clone()));
-                hh
-            } else {String::new()};
-            // tab/newline would break the TSV — sanitize into the stored value
-            let decoded_full = if value.contains('%'){ url_decode(&value) } else { value.clone() };
-            let clean:String=decoded_full.chars().map(|c| if c=='\t'||c=='\n'||c=='\r'{' '}else{c}).collect();
-            let mut det=detect(&value);
-            let name_tags=detect_name(&name);
-            if !name_tags.is_empty(){
-                let extra=name_tags.join(",");
-                det = if det=="-" { extra } else { format!("{det},{extra}") };
-            }
-            rows.push((host.clone(),name,vh,exp,ss,e,etld1_psl(&host, &psl),clean,det));
+        raw.extend(it.into_iter().map(|(h,n,v,e,s)|(h,n,v,e,s,"firefox".to_string())));
+    }
+    // Chromium: decrypt cookie values in memory; same (host,name,value,expiry,samesite)
+    // tuple shape as the Firefox reader plus the source browser, so the pass below
+    // is source-agnostic but each row stays attributable.
+    raw.extend(crate::chromium::read_all());
+
+    // Cross-browser: the same (host,name) present in more than one browser. If the
+    // values also match, the SAME identifier is following the user across browsers,
+    // which is a stronger signal than a mere duplicate name.
+    let mut hn_browsers:HashMap<(String,String),std::collections::HashSet<String>>=HashMap::new();
+    let mut hn_values:HashMap<(String,String),std::collections::HashSet<String>>=HashMap::new();
+    for (host,name,value,_,_,br) in &raw {
+        let k=(host.clone(),name.clone());
+        hn_browsers.entry(k.clone()).or_default().insert(br.clone());
+        hn_values.entry(k).or_default().insert(value.clone());
+    }
+
+    for (host,name,value,exp,ss,browser) in raw {
+        let e=entropy(&value);
+        let vh=if value.len()>=10 && e>=3.0 {
+            let mut h=Sha256::new(); h.update(value.as_bytes());
+            let hh=format!("{:x}",h.finalize());
+            val_hosts.entry(hh.clone()).or_default().insert(etld1_psl(&host, &psl));
+            val_preview.entry(hh.clone()).or_insert_with(|| value.clone());
+            val_detail.entry(hh.clone()).or_insert((host.clone(), e));
+            let host_dom=etld1_psl(&host, &psl);
+            let host_bare=host.trim_start_matches('.').to_string();
+            let org = trackers.get(&host_bare)
+                .or_else(||trackers.get(&host_dom))
+                .cloned().unwrap_or_else(||{
+                // fallback: cookie-name heuristic
+                if name.starts_with("_cc_id")||name.starts_with("cto_")||name.starts_with("_pubcid"){"Criteo".into()}
+                else if name.starts_with("unifiedid"){"TradeDesk".into()}
+                else if name.starts_with("_ga")||name.starts_with("_gcl")||name=="NID"||name=="IDE"{"Google".into()}
+                else if name.starts_with("_fbp")||name=="fr"{"Meta".into()}
+                else if name.starts_with("MUID")||name.starts_with("_uet"){"Microsoft".into()}
+                else {"unknown-broker".into()}
+            });
+            val_meta.entry(hh.clone()).or_insert_with(|| (name.clone(), org.clone()));
+            hh
+        } else {String::new()};
+        // tab/newline would break the TSV — sanitize into the stored value
+        let decoded_full = if value.contains('%'){ url_decode(&value) } else { value.clone() };
+        let clean:String=decoded_full.chars().map(|c| if c=='\t'||c=='\n'||c=='\r'{' '}else{c}).collect();
+        let mut det=detect(&value);
+        let name_tags=detect_name(&name);
+        if !name_tags.is_empty(){
+            let extra=name_tags.join(",");
+            det = if det=="-" { extra } else { format!("{det},{extra}") };
         }
+        // cross-browser presence (see above): SAME-ID is the stronger finding.
+        let k=(host.clone(),name.clone());
+        if hn_browsers.get(&k).map(|s|s.len()>1).unwrap_or(false){
+            let same=hn_values.get(&k).map(|s|s.len()==1).unwrap_or(false);
+            let tag=if same {"XBROWSER-SAME-ID"} else {"XBROWSER"};
+            det = if det=="-" { tag.to_string() } else { format!("{det},{tag}") };
+        }
+        rows.push((host.clone(),name,vh,exp,ss,e,etld1_psl(&host, &psl),clean,det,browser));
     }
 
     // which value-hashes are synced (>=2 distinct domains)
@@ -251,15 +276,15 @@ pub fn run()->anyhow::Result<()>{
 
     // write enriched detail
     let mut out=fs::File::create("data/cookies_detail.tsv")?;
-    writeln!(out,"host\tetld1\tname\tcategory\tsubtype\tentropy\texpiry\tsamesite\tsynced\tdetect\tvhash\tcandecode")?;
-    for (host,name,vh,exp,ss,e,dom,value,det) in &rows {
+    writeln!(out,"host\tetld1\tname\tcategory\tsubtype\tentropy\texpiry\tsamesite\tsynced\tdetect\tvhash\tcandecode\tbrowser")?;
+    for (host,name,vh,exp,ss,e,dom,value,det,browser) in &rows {
         let (cat,sub)=categorize(name,&cats);
         let ssn=match ss{0=>"none",1=>"lax",2=>"strict",_=>"?"};
         let persist=if *exp>0{"persistent"}else{"session"};
         let syncf=if !vh.is_empty() && synced.contains(vh){"SYNCED"}else{"-"};
         let vh12=if vh.len()>=12{&vh[..12]}else{"-"};
         let cd=if decodable(value){"Y"}else{"N"};
-        writeln!(out,"{host}	{dom}	{name}	{cat}	{sub}	{e:.1}	{persist}	{ssn}	{syncf}	{det}	{vh12}	{cd}")?;
+        writeln!(out,"{host}	{dom}	{name}	{cat}	{sub}	{e:.1}	{persist}	{ssn}	{syncf}	{det}	{vh12}	{cd}	{browser}")?;
     }
     // per-cookie partner lookup: this cookie's value-hash -> the OTHER domains sharing it
     // (written as host+name -> comma-domains so the TUI can show exact partners)
