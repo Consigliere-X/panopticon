@@ -9,6 +9,7 @@ mod sync;
 mod tui;
 mod correlate;
 mod cookies;
+mod chromium;
 mod flow;
 use std::{collections::HashMap, env, fs, fs::OpenOptions, io::Write};
 use pnet::datalink::{self, Channel::Ethernet};
@@ -73,6 +74,7 @@ fn parse_dns(b: &[u8]) -> Vec<(String, String)> {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    if args.iter().any(|a| a == "--chromium-check") { chromium::diagnostic().unwrap(); return; }
     if args.iter().any(|a| a == "--enrich") { enrich::run().unwrap(); return; }
     if args.iter().any(|a| a == "--sync") { sync::run().unwrap(); return; }
     if args.iter().any(|a| a == "--tui | --sync") { tui::run().unwrap(); return; }

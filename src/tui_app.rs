@@ -6,7 +6,7 @@ use std::{collections::{HashMap, HashSet}, fs, io, time::Duration};
 // ---------- data model ----------
 #[derive(Clone)]
 struct Cookie { host:String, dom:String, name:String, cat:String, sub:String,
-                entropy:f64, expiry:String, samesite:String, synced:bool, value:String, detect:String, vhash:String, candecode:bool }
+                entropy:f64, expiry:String, samesite:String, synced:bool, value:String, detect:String, vhash:String, candecode:bool, browser:String }
 
 fn parent(o:&str)->&str{let l=o.to_lowercase();
     if l.contains("google"){"Google"}else if l.contains("meta")||l.contains("facebook"){"Meta"}
@@ -38,7 +38,8 @@ fn load()->Vec<Cookie>{
                 value:String::new(),  // NOT from disk — fetched live from SQLite on demand
                 detect:f.get(9).unwrap_or(&"-").to_string(),
                 vhash:f.get(10).unwrap_or(&"-").to_string(),
-                candecode:f.get(11).map(|x|*x=="Y").unwrap_or(false)})}).collect()
+                candecode:f.get(11).map(|x|*x=="Y").unwrap_or(false),
+                browser:f.get(12).unwrap_or(&"firefox").to_string()})}).collect()
 }
 
 struct TrackerRow{ org:String, sites:usize, cookies:usize, sync:usize,
@@ -76,6 +77,7 @@ struct App{
     search:String,
     searching:bool,
     cat_filter:String,
+    br_filter:String,
 }
 
 impl App{
@@ -96,8 +98,9 @@ impl App{
         let pii_mode = self.cat_filter=="⚠ PII";
         let mut v:Vec<&Cookie>=self.cookies.iter()
             .filter(|c| self.cat_filter.is_empty()
-                || (pii_mode && is_pii_val(&c.detect, &fetch_value(&c.host,&c.name)))
+                || (pii_mode && is_pii_val(&c.detect, &fetch_value(&c.host,&c.name,&c.browser)))
                 || (!pii_mode && c.cat==self.cat_filter))
+            .filter(|c| self.br_filter.is_empty() || c.browser==self.br_filter)
             .filter(|c| q.is_empty()
                 || c.name.to_lowercase().contains(&q)
                 || c.host.to_lowercase().contains(&q))
@@ -109,7 +112,7 @@ impl App{
     // ordered category list for the chip bar (fixed severity order + counts)
     fn pii_count(&self)->usize{
         self.cookies.iter()
-            .filter(|c| is_pii_val(&c.detect, &fetch_value(&c.host,&c.name)))
+            .filter(|c| is_pii_val(&c.detect, &fetch_value(&c.host,&c.name,&c.browser)))
             .count()
     }
     fn cat_chips(&self)->Vec<(String,usize)>{
@@ -273,9 +276,26 @@ fn window(sel:usize, voff:&mut usize, total:usize, height:usize)->usize{
     *voff
 }
 
-// Read a single cookie's value LIVE from Firefox — never persisted to disk.
-fn fetch_value(host:&str, name:&str)->String{
+// Stable colour per browser so the source is readable at a glance.
+fn browser_color(b:&str)->Color{
+    match b {
+        "firefox"=>Color::Rgb(255,149,0),
+        "chrome"|"chrome-beta"|"chrome-dev"=>Color::Rgb(66,133,244),
+        "chromium"=>Color::Rgb(120,170,255),
+        "brave"|"brave-beta"=>Color::Rgb(251,84,43),
+        "edge"|"edge-beta"|"edge-dev"=>Color::Rgb(0,173,239),
+        "vivaldi"=>Color::Rgb(239,63,63),
+        "opera"=>Color::Rgb(255,27,45),
+        _=>Color::Gray,
+    }
+}
+
+// Read a single cookie's value LIVE from the browser — never persisted to disk.
+// `browser` is the row's source label, so a cookie that exists in several browsers
+// resolves to the value from its OWN store rather than whichever matched first.
+fn fetch_value(host:&str, name:&str, browser:&str)->String{
     use rusqlite::{Connection,OpenFlags};
+    if browser.is_empty() || browser=="firefox" {
     let home=std::env::var("HOME").unwrap_or_default();
     for root in [".config/mozilla/firefox",".mozilla/firefox"]{
         let base=std::path::PathBuf::from(&home).join(root);
@@ -293,6 +313,11 @@ fn fetch_value(host:&str, name:&str)->String{
                 }
             }
         }
+    }
+    }
+    // Chromium family (Chrome/Brave/Edge/…), decrypted live from the matching store.
+    if browser!="firefox" {
+        return crate::chromium::fetch_one(browser, host, name).unwrap_or_default();
     }
     String::new()
 }
@@ -465,7 +490,7 @@ pub fn run()->anyhow::Result<()>{
 
     let mut app=App{cookies, tab:Tab::Overview, sel:0,
                     expanded:false, voff:0,
-                    flows, live_orgs, cookie_rx, last_scan:std::time::Instant::now(), drill:None, decoded:std::collections::HashMap::new(), detail_scroll:0, show_help:false, session_start:chrono_now(), export:ExportStage::None, export_scope:String::new(), export_type:String::new(), export_msg:None, search:String::new(), searching:false, cat_filter:String::new()};
+                    flows, live_orgs, cookie_rx, last_scan:std::time::Instant::now(), drill:None, decoded:std::collections::HashMap::new(), detail_scroll:0, show_help:false, session_start:chrono_now(), export:ExportStage::None, export_scope:String::new(), export_type:String::new(), export_msg:None, search:String::new(), searching:false, cat_filter:String::new(), br_filter:String::new()};
 
     enable_raw_mode()?;
     let mut out=io::stdout();
@@ -557,7 +582,7 @@ pub fn run()->anyhow::Result<()>{
                     continue;
                 }
                 match k.code{
-                    KeyCode::Esc if !app.search.is_empty()||!app.cat_filter.is_empty()=>{ app.search.clear(); app.searching=false; app.cat_filter.clear(); app.sel=0; app.voff=0; }
+                    KeyCode::Esc if !app.search.is_empty()||!app.cat_filter.is_empty()||!app.br_filter.is_empty()=>{ app.search.clear(); app.searching=false; app.cat_filter.clear(); app.br_filter.clear(); app.sel=0; app.voff=0; }
                     KeyCode::Esc if app.expanded=>{ app.expanded=false; }
                     KeyCode::Esc if app.drill.is_some()=>{ app.drill=None; app.sel=0; app.voff=0; }
                     KeyCode::Backspace if app.drill.is_some()=>{ app.drill=None; app.sel=0; app.voff=0; app.expanded=false; }
@@ -603,6 +628,16 @@ pub fn run()->anyhow::Result<()>{
                         app.cat_filter=names[(cur+1)%names.len()].clone();
                         app.sel=0; app.voff=0;
                     }
+                    KeyCode::Char('b') if matches!(app.tab,Tab::Cookies) && app.drill.is_none() && !app.searching =>{
+                        // cycle: all browsers -> each browser present, in stable order
+                        let mut names:Vec<String>=vec![String::new()];
+                        let mut seen=std::collections::BTreeSet::new();
+                        for c in &app.cookies { seen.insert(c.browser.clone()); }
+                        names.extend(seen.into_iter());
+                        let cur=names.iter().position(|c|c==&app.br_filter).unwrap_or(0);
+                        app.br_filter=names[(cur+1)%names.len()].clone();
+                        app.sel=0; app.voff=0;
+                    }
                     KeyCode::Char('/') if matches!(app.tab,Tab::Sites|Tab::Cookies) && app.drill.is_none() =>{
                         app.searching=true; app.search.clear(); app.sel=0; app.voff=0;
                     }
@@ -611,7 +646,7 @@ pub fn run()->anyhow::Result<()>{
                             if c.candecode {
                                 let k=cookie_key(&c);
                                 if !app.decoded.contains_key(&k){
-                                    let live=fetch_value(&c.host,&c.name);
+                                    let live=fetch_value(&c.host,&c.name,&c.browser);
                                     let t=deep_decode(&live);
                                     app.decoded.insert(k,t);
                                 }
@@ -814,15 +849,17 @@ fn draw_cookies(f:&mut Frame,a:Rect,app:&mut App){
             Cell::from(c.name.clone()).style(rowstyle),
             Cell::from(c.cat.clone()).style(rowstyle),
             Cell::from(c.dom.clone()).style(rowstyle),
+            Cell::from(c.browser.clone()).style(rowstyle.fg(browser_color(&c.browser))),
             Cell::from(format!("{:.1}",c.entropy)).style(rowstyle),
             flags_cell,
         ])
     }).collect();
     let t=Table::new(rows,[Constraint::Min(22),Constraint::Length(12),Constraint::Min(18),
-        Constraint::Length(6),Constraint::Length(10)])
-        .header(Row::new(vec!["COOKIE","CATEGORY","HOST","ENTROPY","FLAGS"]).style(Style::new().bold().fg(Color::Yellow)))
+        Constraint::Length(9),Constraint::Length(6),Constraint::Length(10)])
+        .header(Row::new(vec!["COOKIE","CATEGORY","HOST","BROWSER","ENTROPY","FLAGS"]).style(Style::new().bold().fg(Color::Yellow)))
         .block(Block::bordered()
-            .title(format!(" cookies ({}) — Enter=detail ",cs.len()))
+            .title(format!(" cookies ({}) — Enter=detail{} ",cs.len(),
+                if app.br_filter.is_empty(){String::new()}else{format!(" — browser: {}",app.br_filter)}))
             .title(Line::from(search_box(app)).right_aligned()));
     f.render_widget(t,a);
 }
@@ -971,7 +1008,7 @@ fn draw_personal(f:&mut Frame,a:Rect,app:&mut App){
         // (value-aware trivial recheck below, after we fetch the live value)
         let d=c.detect.to_uppercase();
         // decode the value once so email/name show readable, not %40
-        let raw = fetch_value(&c.host,&c.name);
+        let raw = fetch_value(&c.host,&c.name,&c.browser);
         if !is_pii_val(&c.detect,&raw){continue;}  // drop trivial-value name-flagged cookies
         let readable = if raw.contains('%'){
             let mut o=String::new(); let b=raw.as_bytes(); let mut i=0;
@@ -1113,8 +1150,9 @@ fn draw_help(f:&mut Frame,a:Rect){
     let item=|k:&str,v:&str| Line::from(vec![
         Span::styled(format!("  {:13}",k),Style::new().fg(w).bold()),
         Span::styled(v.to_string(),Style::new().fg(g))]);
+    // pad to a column, but never let a long label butt up against its description
     let flag=|k:&str,col:Color,v:&str| Line::from(vec![
-        Span::styled(format!("  {:8}",k),Style::new().fg(col).bold()),
+        Span::styled(format!("  {:8} ",k),Style::new().fg(col).bold()),
         Span::styled(v.to_string(),Style::new().fg(g))]);
     let blank=||Line::from("");
     let lines=vec![
@@ -1152,6 +1190,12 @@ fn draw_help(f:&mut Frame,a:Rect){
         flag("?",dk,"The cookie didn't say (browser treats it as 'lax')."),
         blank(),
 
+        title("BROWSER — which browser this cookie came from"),
+        body("The same site can store different cookies in each browser you use."),
+        flag("XBROWSER",Color::Yellow,"this cookie name exists in more than one of your browsers."),
+        flag("XBROWSER-SAME-ID",Color::Red,"the SAME value is in several browsers — one identifier follows you across all of them."),
+        blank(),
+
         title("SYNC  (⇄ symbol)"),
         body("The SAME ID value was found on several different websites. That means those"),
         body("sites (or an ad broker like Criteo/Google) are sharing your identity to build"),
@@ -1185,6 +1229,7 @@ fn draw_help(f:&mut Frame,a:Rect){
         item("↑ ↓","move up/down a list       Enter  open details / drill in"),
         item("Esc","go back / close            /      search"),
         item("← →","filter by category (Cookies tab)"),
+        item("b","filter by browser (Cookies tab) — cycles firefox / chrome / brave / …"),
         item("d","decode the selected cookie  ?  this help   q  quit"),
         item("PgUp/PgDn","scroll inside a long cookie detail (Fn+↑/↓ on laptops)"),
     ];
@@ -1277,6 +1322,19 @@ fn report_audit(app:&App, scope:&str, start:&str, now:&str)->String{
         sites.len(), cookies.len(), trackers.len(),
         cookies.iter().filter(|c|c.synced).count(),
         cookies.iter().filter(|c|!pii_kinds(&c.detect).is_empty()).count()));
+    {   // per-browser breakdown, so a mixed-browser audit is unambiguous
+        let mut bc:std::collections::BTreeMap<&str,usize>=std::collections::BTreeMap::new();
+        for c in &cookies { *bc.entry(c.browser.as_str()).or_insert(0)+=1; }
+        if bc.len()>1 {
+            o.push_str("Cookies by browser: ");
+            o.push_str(&bc.iter().map(|(b,n)|format!("{b} {n}")).collect::<Vec<_>>().join(" · "));
+            let xb=cookies.iter().filter(|c|c.detect.contains("XBROWSER")).count();
+            let same=cookies.iter().filter(|c|c.detect.contains("XBROWSER-SAME-ID")).count();
+            o.push_str(&format!("\n\n{xb} cookies exist in more than one browser"));
+            if same>0 { o.push_str(&format!(", {same} of them sharing the SAME identifier across browsers")); }
+            o.push_str(".\n\n");
+        }
+    }
 
     o.push_str("## Trackers (by reach)\n\n");
     let trows:Vec<Vec<String>>=trackers.iter().map(|t|vec![
@@ -1294,11 +1352,11 @@ fn report_audit(app:&App, scope:&str, start:&str, now:&str)->String{
         let mut v=cks.clone(); v.sort_by(|a,b|b.entropy.partial_cmp(&a.entropy).unwrap());
         let rows:Vec<Vec<String>>=v.iter().map(|c|{
             let pii=pii_kinds(&c.detect);
-            vec![c.name.clone(),c.cat.clone(),format!("{:.1}",c.entropy),c.samesite.clone(),
+            vec![c.name.clone(),c.browser.clone(),c.cat.clone(),format!("{:.1}",c.entropy),c.samesite.clone(),
                  if c.synced{"⇄".into()}else{String::new()},
                  if pii.is_empty(){String::new()}else{pii.join(",")}]
         }).collect();
-        o.push_str(&md_table(&["Cookie","Category","Entropy","SameSite","Sync","PII"],&rows));
+        o.push_str(&md_table(&["Cookie","Browser","Category","Entropy","SameSite","Sync","PII"],&rows));
         o.push('\n');
     }
 
@@ -1321,10 +1379,10 @@ fn report_cookies(app:&App, scope:&str, start:&str, now:&str)->String{
         o.push_str(&format!("## {} ({} cookies)\n\n",site,cks.len()));
         let mut v=cks.clone(); v.sort_by(|a,b|b.entropy.partial_cmp(&a.entropy).unwrap());
         let rows:Vec<Vec<String>>=v.iter().map(|c|vec![
-            c.name.clone(),c.cat.clone(),format!("{:.1}",c.entropy),c.expiry.clone(),
+            c.name.clone(),c.browser.clone(),c.cat.clone(),format!("{:.1}",c.entropy),c.expiry.clone(),
             c.samesite.clone(),if c.synced{"⇄".into()}else{String::new()},
             if c.detect=="-"{String::new()}else{c.detect.clone()}]).collect();
-        o.push_str(&md_table(&["Cookie","Category","Entropy","Expiry","SameSite","Sync","Detected"],&rows));
+        o.push_str(&md_table(&["Cookie","Browser","Category","Entropy","Expiry","SameSite","Sync","Detected"],&rows));
         o.push('\n');
     }
     o.push_str("\n---\n_Cookie detail. Redacted — no raw values. Safe to share._\n");
@@ -1354,11 +1412,11 @@ fn report_pii(app:&App, scope:&str, start:&str, now:&str, redact:bool)->String{
         o.push_str(&format!("## {} ({} found)\n\n",kind_name,items.len()));
         for c in items {
             if redact {
-                o.push_str(&format!("- `{}` on **{}**\n",c.name,c.dom));
+                o.push_str(&format!("- `{}` on **{}** _({})_\n",c.name,c.dom,c.browser));
             } else {
-                let raw=fetch_value(&c.host,&c.name);
+                let raw=fetch_value(&c.host,&c.name,&c.browser);
                 let shown=if raw.contains('%'){ url_decode_str(&raw) } else { raw };
-                o.push_str(&format!("- `{}` on **{}**\n  ```\n  {}\n  ```\n",c.name,c.dom,shown));
+                o.push_str(&format!("- `{}` on **{}** _({})_\n  ```\n  {}\n  ```\n",c.name,c.dom,c.browser,shown));
             }
         }
         o.push('\n');
@@ -1496,6 +1554,8 @@ fn draw_footer(f:&mut Frame,a:Rect,app:&App){
             let mut lines=vec![
                 Line::from(vec![Span::styled("name: ",Style::new().fg(Color::Yellow)),Span::raw(&c.name)]),
                 Line::from(vec![Span::styled("host: ",Style::new().fg(Color::Yellow)),Span::raw(&c.host)]),
+                Line::from(vec![Span::styled("browser: ",Style::new().fg(Color::Yellow)),
+                    Span::styled(c.browser.clone(),Style::new().fg(browser_color(&c.browser)))]),
                 Line::from(vec![Span::styled("category: ",Style::new().fg(Color::Yellow)),
                     Span::styled(format!("{} / {}",c.cat,c.sub),Style::new().fg(cat_color(&c.cat)))]),
                 Line::from(vec![Span::styled("entropy: ",Style::new().fg(Color::Yellow)),
@@ -1517,7 +1577,7 @@ fn draw_footer(f:&mut Frame,a:Rect,app:&App){
                                  else{c.detect.clone()},
                         Style::new().fg(if c.detect=="-"{Color::Gray}else{Color::Red}).bold())]),
                 Line::from(vec![Span::styled("RAW VALUE: ",Style::new().fg(Color::Yellow).bold())]),
-                Line::from(Span::styled(fetch_value(&c.host,&c.name), Style::new().fg(Color::White))),
+                Line::from(Span::styled(fetch_value(&c.host,&c.name,&c.browser), Style::new().fg(Color::White))),
             ];
             let this_key=cookie_key(c);
             if let Some(trace)=app.decoded.get(&this_key) {
@@ -1554,6 +1614,7 @@ fn draw_footer(f:&mut Frame,a:Rect,app:&App){
         Span::styled(" Enter ",Style::new().bg(Color::DarkGray)),Span::raw(" detail  "),
         Span::styled(" d ",Style::new().bg(Color::DarkGray)),Span::raw(" decode  "),
         Span::styled(" / ",Style::new().bg(Color::DarkGray)),Span::raw(" search  "),
+        Span::styled(" b ",Style::new().bg(Color::DarkGray)),Span::raw(" browser  "),
         Span::styled(" e ",Style::new().bg(Color::DarkGray)),Span::raw(" export  "),Span::styled(" ? ",Style::new().bg(Color::DarkGray)),Span::raw(" help  "),Span::styled(" q ",Style::new().bg(Color::DarkGray)),Span::raw(" quit "),
     ])).block(Block::bordered());
     f.render_widget(help,a);

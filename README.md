@@ -98,8 +98,9 @@ Panopticon is a privacy tool, so it holds itself to a privacy standard. See
 
 ## Install
 
-**Requirements:** Linux, a recent Rust toolchain, Python 3 (for setup), and
-**Firefox** (see Browser Support below). eBPF flow capture needs a recent kernel.
+**Requirements:** Linux, a recent Rust toolchain, Python 3 (for setup), and a
+supported browser — **Firefox** or a **Chromium-family** browser (see Browser
+Support below). eBPF flow capture needs a recent kernel.
 
 ```bash
 git clone https://github.com/Consigliere-X/panopticon
@@ -110,11 +111,37 @@ cargo build --release
 
 ### Browser support
 
-Panopticon currently reads **Firefox** cookies only. Chromium/Chrome support is
-planned but not yet implemented: Chromium encrypts cookie values with an OS-keyring
-key, so reading them requires keyring decryption that isn't in place yet. On
-Chromium the value-based features (PII detection, sync, decode) wouldn't work, so
-it's Firefox-only for now. Contributions toward Chromium support are welcome.
+Panopticon reads both **Firefox** and **Chromium-family** browsers — Chrome,
+Chromium, Brave, Edge, Vivaldi, and Opera — whether installed natively, via
+**Flatpak** (`~/.var/app`), or via **Snap** (`~/snap`). All value-based features
+(PII detection, cross-site sync, live decode) work on both.
+
+Firefox stores cookie values in plaintext. Chromium encrypts them (AES-128-CBC,
+key via PBKDF2). Panopticon handles both Chromium variants:
+
+- **`v10`** — encrypted with a fixed key (no keyring). Works out of the box.
+- **`v11`** — encrypted with a per-browser key stored in your desktop keyring
+  (GNOME Keyring / KWallet via the Secret Service). Decrypted automatically when
+  the keyring is unlocked and reachable. If there's no session keyring (e.g. a
+  headless box), `v11` cookies are skipped rather than mis-read — never decoded
+  into garbage.
+
+Chrome M124+ additionally binds each value to its domain (a SHA-256 prefix);
+Panopticon detects and strips this, so old and new cookies in the same profile
+both decode correctly.
+
+Verify decryption against your own cookies without writing any value to disk:
+
+```bash
+./target/release/panopticon --chromium-check
+```
+
+It prints, per profile, how many cookies decrypted and a `v10`/`v11` breakdown,
+with values shown masked. If a browser is running and holds a lock, close it and
+retry (Panopticon opens the DB read-only/immutable, so this is rarely needed).
+
+As with Firefox, **decrypted values are never written to disk** — they're held in
+memory for the analysis pass and fetched live in the TUI on demand.
 
 ---
 
@@ -135,8 +162,9 @@ Inside: `Tab` switches views, arrows move, `Enter` opens details, `/` searches,
 
 ## How it works
 
-- **Cookie analysis** reads Firefox's `cookies.sqlite` read-only; tracking IDs
-  are detected by fingerprint, not a blocklist, so first-party trackers show up.
+- **Cookie analysis** reads Firefox's `cookies.sqlite` and Chromium's `Cookies`
+  DB read-only (decrypting Chromium values in memory); tracking IDs are detected
+  by fingerprint, not a blocklist, so first-party trackers show up.
 - **Sync detection** hashes values to find the same ID across sites, attributing
   the broker via the DuckDuckGo Tracker Radar dataset + a local override list.
 - **Flow capture** uses eBPF, resolves each IP's owner against a full ip2asn
