@@ -50,6 +50,8 @@ Panopticon presents everything in a seven-tab terminal interface:
 - **Cookies** — every cookie, with category, entropy (is it a tracking ID?),
   and SameSite flag (can it follow you cross-site?). Filter by category or a
   PII chip; search by name/host; decode scrambled values.
+
+  ![Cookies tab — per-browser attribution](docs/cookies-browser.png)
 - **Data Types** — a breakdown of what kinds of data are being collected.
 - **Sync Graph** — when the same hidden ID appears on multiple sites, a broker
   (Criteo, Google, …) can merge your activity. Shown as a hub-and-spoke map
@@ -139,6 +141,8 @@ Verify decryption against your own cookies without writing any value to disk:
 It prints, per profile, how many cookies decrypted and a `v10`/`v11` breakdown,
 with values shown masked. If a browser is running and holds a lock, close it and
 retry (Panopticon opens the DB read-only/immutable, so this is rarely needed).
+
+![Verifying Chromium decryption](docs/chromium-check.png)
 
 As with Firefox, **decrypted values are never written to disk** — they're held in
 memory for the analysis pass and fetched live in the TUI on demand.
