@@ -23,9 +23,10 @@ companies link your identity across sites — all from your own machine, in a
 terminal dashboard.
 
 It reads data that is *already on your computer* (your browser's cookies, your
-outbound network connections) and makes the invisible visible: which trackers
-watch you, what personal data sits in plaintext in your cookies, and which
-companies are quietly building a combined profile of everything you do.
+outbound network connections) and makes the invisible visible: which companies
+have cookies in your browsers and which of them follow you across sites you
+didn't visit them on, what personal data sits in plaintext in your cookies, and
+where the same hidden identifier turns up on more than one site.
 
 > **Panopticon is a tool for auditing your _own_ privacy.** See
 > [Responsible Use](#responsible-use) before running it.
@@ -42,8 +43,11 @@ email, name, location, and device IDs — and exactly which sites hold it.
 
 Panopticon presents everything in a seven-tab terminal interface:
 
-- **Overview** — who is tracking you, ranked by reach (what % of your browsing
-  each company sees), whether they're active now, and what data they collect.
+- **Overview** — every company with cookies in your browsers, ranked by reach
+  (what % of your browsing each one sees), whether they're active now, and what
+  data they collect. Each is labelled **third-party** (present on sites it does
+  not own — an ad or analytics company riding along) or **first-party** (a site
+  you actually visited). Third parties are listed first.
 
   ![Overview tab](docs/overview.png)
 - **Sites** — every site setting cookies, ranked by how many trackers it hosts.
@@ -53,9 +57,12 @@ Panopticon presents everything in a seven-tab terminal interface:
 
   ![Cookies tab — per-browser attribution](docs/cookies-browser.png)
 - **Data Types** — a breakdown of what kinds of data are being collected.
-- **Sync Graph** — when the same hidden ID appears on multiple sites, a broker
-  (Criteo, Google, …) can merge your activity. Shown as a hub-and-spoke map
-  with the broker named and the linked sites listed.
+- **Sync Graph** — when the same hidden ID appears on several sites, whoever set
+  it can tell those visits are one person. Shown as a hub-and-spoke map with the
+  linked sites listed. Panopticon separates two cases: an ID shared across sites
+  owned by *different* parties (flagged, the ad-broker case) from one shared
+  across a single company's own properties (`SAME-OWNER` — worth knowing, but not
+  evidence of a deal between companies).
 
   ![Sync Graph tab](docs/sync-graph.png)
 - **Flows** — live outbound network connections, each destination's owning
@@ -173,6 +180,7 @@ sudo systemctl enable --now panopticon
 ```
 
 Inside: `Tab` switches views, arrows move, `Enter` opens details, `/` searches,
+`b` filters by browser, `r` re-reads your cookies now,
 `e` exports, and **`?` opens a plain-English legend** of every term and key.
 
 ---

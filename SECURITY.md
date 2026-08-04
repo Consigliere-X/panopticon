@@ -32,8 +32,9 @@ Almost everything Panopticon writes goes to `./data/`, which is covered by
 live-flow socket, described at the end of this section. Contents, in increasing
 order of sensitivity:
 
-- `cookies_detail.tsv` — cookie *names, hosts, browser, categories, entropy, and
-  detection flags*, plus a 12-character truncated hash of each value. **No raw
+- `cookies_detail.tsv` — cookie *names, hosts, browser, attributed company,
+  first/third-party relationship, categories, entropy, and detection flags*, plus
+  a 12-character truncated hash of each value. **No raw
   cookie values are written to this file.** Note that every cookie value *is* read
   and processed in memory during the enrichment pass — that is how entropy, PII
   detection and sync hashing are computed, and Chromium values are decrypted to do
