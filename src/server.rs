@@ -59,8 +59,23 @@ pub fn run_server(rx: std::sync::mpsc::Receiver<(String,u32,String,String,u16,St
     let path = crate::wire::sock_bind_path();
     let _ = fs::remove_file(&path);
     let listener = UnixListener::bind(&path)?;
-    // world-writable so a non-root TUI can connect to a root daemon
-    fs::set_permissions(&path, <fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o666)).ok();
+    // The daemon may run as root (it needs CAP_BPF) while the TUI runs as you.
+    // Rather than make the socket world-accessible, hand it to the user who owns
+    // the project directory and lock it to them: flow events name the processes,
+    // IPs and hostnames you connect to, so any other local user reading this
+    // socket would be watching your browsing in real time.
+    {
+        use std::os::unix::fs::MetadataExt;
+        let owner = fs::metadata(".").ok().map(|m| (m.uid(), m.gid()));
+        if let Some((uid, gid)) = owner {
+            let _ = std::os::unix::fs::chown(&path, Some(uid), Some(gid));
+        }
+        fs::set_permissions(
+            &path,
+            <fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o600),
+        )
+        .ok();
+    }
     eprintln!("[panopticon] streaming on {path}");
     let clients: Clients = Arc::new(Mutex::new(vec![]));
     { let (l,c)=(listener, clients.clone()); thread::spawn(move || accept_loop(l, c)); }
