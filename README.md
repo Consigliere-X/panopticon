@@ -1,138 +1,191 @@
-# vigil
-
-A *C. elegans* neural-substrate simulator in pure Rust, built as a scientific
-**instrument with stated epistemic bounds** — not as an argument for a
-conclusion.
+<div align="center">
 
 ```
-vigil claims       what this instrument may and may not conclude
-vigil substrate    connectome + full cleaning report
-vigil dynamics     parameter provenance + calibrated stimulation sweep
-vigil metrics      PCI / Φ, with the null model stated
-vigil validate     every validation gate (exits non-zero when data is absent)
-vigil anchor       real-EEG sleep anchor across all subject-nights
-vigil transfer     state round-trip + Benettin Lyapunov  [SIM only]
-vigil lesion       clamped-node experiments with bootstrap CIs
-vigil manifest     reproducibility manifest (checksums, seeds, provenance)
+██████╗  █████╗ ███╗   ██╗ ██████╗ ██████╗ ████████╗██╗ ██████╗ ██████╗ ███╗   ██╗
+██╔══██╗██╔══██╗████╗  ██║██╔═══██╗██╔══██╗╚══██╔══╝██║██╔════╝██╔═══██╗████╗  ██║
+██████╔╝███████║██╔██╗ ██║██║   ██║██████╔╝   ██║   ██║██║     ██║   ██║██╔██╗ ██║
+██╔═══╝ ██╔══██║██║╚██╗██║██║   ██║██╔═══╝    ██║   ██║██║     ██║   ██║██║╚██╗██║
+██║     ██║  ██║██║ ╚████║╚██████╔╝██║        ██║   ██║╚██████╗╚██████╔╝██║ ╚████║
+╚═╝     ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝        ╚═╝   ╚═╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝
 ```
 
-## The contract
+**See what trackers, cookies, and data brokers know about you — locally, in your terminal.**
 
-Every quantity vigil prints is tagged:
+<img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
+<img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust">
+<img src="https://img.shields.io/badge/platform-linux-lightgrey.svg" alt="Platform: Linux">
 
-- **[SIM]** — a property of *this deterministic simulation*.
-- **[BIO]** — an independently established biological fact, with a citation.
-- **[UNFITTED]** — a free parameter not constrained by any data available here.
+</div>
 
-And one rule governs the rest:
+**A local privacy observatory.** Panopticon shows you what the websites you
+visit actually store about you, who they send your data to, and how tracking
+companies link your identity across sites — all from your own machine, in a
+terminal dashboard.
 
-> **A biological claim requires reference data. If the data is absent, the claim
-> is reported `UNVALIDATED` — never as a pass.**
+It reads data that is *already on your computer* (your browser's cookies, your
+outbound network connections) and makes the invisible visible: which trackers
+watch you, what personal data sits in plaintext in your cookies, and which
+companies are quietly building a combined profile of everything you do.
 
-Run `vigil validate` with no reference data and it exits **non-zero**, having
-licensed nothing:
+> **Panopticon is a tool for auditing your _own_ privacy.** See
+> [Responsible Use](#responsible-use) before running it.
 
+![Panopticon — Personal Data tab](docs/personal-data.png)
+
+*Panopticon found this personal data sitting in plaintext in browser cookies —
+email, name, location, and device IDs — and exactly which sites hold it.
+(Values redacted in this screenshot; on your own machine they're shown in full.)*
+
+---
+
+## What it shows you
+
+Panopticon presents everything in a seven-tab terminal interface:
+
+- **Overview** — who is tracking you, ranked by reach (what % of your browsing
+  each company sees), whether they're active now, and what data they collect.
+
+  ![Overview tab](docs/overview.png)
+- **Sites** — every site setting cookies, ranked by how many trackers it hosts.
+- **Cookies** — every cookie, with category, entropy (is it a tracking ID?),
+  and SameSite flag (can it follow you cross-site?). Filter by category or a
+  PII chip; search by name/host; decode scrambled values.
+
+  ![Cookies tab — per-browser attribution](docs/cookies-browser.png)
+- **Data Types** — a breakdown of what kinds of data are being collected.
+- **Sync Graph** — when the same hidden ID appears on multiple sites, a broker
+  (Criteo, Google, …) can merge your activity. Shown as a hub-and-spoke map
+  with the broker named and the linked sites listed.
+
+  ![Sync Graph tab](docs/sync-graph.png)
+- **Flows** — live outbound network connections, each destination's owning
+  company resolved via a full ASN database (works even under encrypted DNS).
+- **Personal Data** — your actual identity found in cookie values: email, name,
+  location, phone, IP, device IDs — decoded and grouped by type.
+
+Export reports (press `e`): a full audit, a cookie-detail report, or a
+personal-data report — each either redacted (safe to share) or full (private).
+
+---
+
+## Responsible Use
+
+**Only run Panopticon against your own machine and your own browsing.**
+
+- It inspects *your* cookies and *your* network traffic on a computer you own.
+- It is **not** a tool for surveilling other people. Using it to capture or
+  analyze someone else's data without their informed consent may be illegal in
+  your jurisdiction and is against the spirit of the project.
+- The eBPF network-capture component sees connection metadata for the whole
+  machine — run it only on a device you control.
+
+Panopticon exists to give *you* visibility into *your own* privacy.
+
+---
+
+## Your data stays yours
+
+Panopticon is a privacy tool, so it holds itself to a privacy standard. See
+[SECURITY.md](SECURITY.md) for the full statement. In short:
+
+- **The cookie metadata cache holds no raw values** — only names, hosts,
+  categories, entropy and a truncated hash. Values are decrypted and analysed
+  in memory, then discarded.
+- Two exceptions, both deliberate: values shared across sites are recorded in
+  `data/sync_clusters.tsv` (that shared ID *is* the tracking evidence), and a
+  full PII report contains decoded personal data if you explicitly export one.
+- Your browsing logs stay local and are git-ignored.
+- **No telemetry. Nothing is ever sent off your machine.**
+- Reads are read-only — Panopticon never modifies your browser.
+
+---
+
+## Install
+
+**Requirements:** Linux, a recent Rust toolchain, Python 3 (for setup), and a
+supported browser — **Firefox** or a **Chromium-family** browser (see Browser
+Support below). eBPF flow capture needs a recent kernel.
+
+```bash
+git clone https://github.com/Consigliere-X/panopticon
+cd panopticon
+./fetch-data.sh          # fetch reference datasets (PSL, tracker map, ASN)
+cargo build --release
 ```
-  [UNVALIDATED] model reproduces observed whole-brain co-activity structure
-  [UNVALIDATED] model reproduces published ablation / optogenetic outcomes
-  [   FAIL    ] model reproduces the tap-withdrawal reflex (held-out behaviour)
-  [UNVALIDATED] LZc instrument recovers wake > slow-wave-sleep on real human EEG
 
-  0 passed, 1 failed, 3 unvalidated (of 4 gates)
+### Browser support
 
-  NO BIOLOGICAL CLAIM IS LICENSED BY THIS RUN.
+Panopticon reads both **Firefox** and **Chromium-family** browsers — Chrome,
+Chromium, Brave, Edge, Vivaldi, and Opera — whether installed natively, via
+**Flatpak** (`~/.var/app`), or via **Snap** (`~/snap`). All value-based features
+(PII detection, cross-site sync, live decode) work on both.
+
+Firefox stores cookie values in plaintext. Chromium encrypts them (AES-128-CBC,
+key via PBKDF2). Panopticon handles both Chromium variants:
+
+- **`v10`** — encrypted with a fixed key (no keyring). Works out of the box.
+- **`v11`** — encrypted with a per-browser key stored in your desktop keyring
+  (GNOME Keyring / KWallet via the Secret Service). Decrypted automatically when
+  the keyring is unlocked and reachable. If there's no session keyring (e.g. a
+  headless box), `v11` cookies are skipped rather than mis-read — never decoded
+  into garbage.
+
+Chrome M124+ additionally binds each value to its domain (a SHA-256 prefix);
+Panopticon detects and strips this, so old and new cookies in the same profile
+both decode correctly.
+
+Verify decryption against your own cookies without writing any value to disk:
+
+```bash
+./target/release/panopticon --chromium-check
 ```
 
-**vigil does not measure consciousness, identity, death, or mind preservation.**
-It measures correlates of conscious *level* and dynamical properties of one model
-whose synaptic parameters are unfitted. See [`FINDINGS.md`](FINDINGS.md) for what
-it *does* support, and
-[`docs/FINDINGS_v0.1_WITHDRAWN.md`](docs/FINDINGS_v0.1_WITHDRAWN.md) for the
-conclusions that were withdrawn, and why.
+It prints, per profile, how many cookies decrypted and a `v10`/`v11` breakdown,
+with values shown masked. If a browser is running and holds a lock, close it and
+retry (Panopticon opens the DB read-only/immutable, so this is rarely needed).
 
-## Architecture
+![Verifying Chromium decryption](docs/chromium-check.png)
 
-Rebuilt from a 2,722-line `main.rs` into a library with a thin CLI.
+As with Firefox, **decrypted values are not written to the metadata cache** —
+they're held in memory for the analysis pass and fetched live in the TUI on
+demand. See [SECURITY.md](SECURITY.md) for the two cases where a value does
+reach disk.
 
-```
-src/
-  lib.rs                  crate root; the epistemic contract, pinned by tests
-  connectome/
-    neuron_names.rs       the canonical 300, generated from the source data
-    classify.rs           EXPLICIT node typing; an unknown name is a hard error
-    load.rs               safe loader; symmetrizes gap junctions, reports cleaning
-  dynamics/
-    params.rs             every parameter carries a Provenance tag
-    transmitter.rs        transmitter identity + a NAMED, swappable sign policy
-    rng.rs                SplitMix64 + Box–Muller normals
-    mod.rs                Sim, allocation-free RK4, Euler–Maruyama noise
-  metrics/
-    lz.rs                 Lempel-Ziv complexity family
-    pci.rs                perturbational complexity + noise-null calibration
-    phi.rs                integrated information (whole-minus-sum), capped at 12
-    lyapunov.rs           Benettin renormalized largest exponent
-    distance.rs           FULL state distance (v ⊕ s), not voltage-only
-    stats.rs              bootstrap CIs, permutation tests, effect sizes
-  edf/
-    mod.rs                bounds-checked EDF/EDF+ reader
-    anchor.rs             multi-subject sleep anchor with paired statistics
-  persist/
-    hash.rs               SHA-256 (NIST vectors), replacing FNV-1a
-    mod.rs                versioned, COMPLETE snapshots; refuses foreign restores
-  experiments/
-    stimulation.rs        amplitude calibration (was hard-coded)
-    lesion.rs             clamped-node experiments, multi-seed
-    transfer.rs           round-trip + sensitivity  [SIM only]
-    manifest.rs           reproducibility manifest
-  validation/
-    mod.rs                the harness: Pass / Fail / Unvalidated
-    recording.rs          gate vs real Ca²⁺ imaging
-    perturbation.rs       gate vs published ablation / optogenetics
-    behaviour.rs          gate vs held-out behaviour (tap-withdrawal)
+---
+
+## Usage
+
+Two halves: a **cookie/privacy analyzer** (no root) and a **live network
+watcher** (needs privileges for eBPF).
+
+```bash
+./target/release/panopticon --app        # main dashboard, no root required
+sudo systemctl enable --now panopticon   # optional live flow capture
 ```
 
-**Zero third-party dependencies.** The numerics, SHA-256, EDF parsing and
-statistics are all in-crate and unit-tested against published vectors, so the
-whole substrate is auditable end to end.
+Inside: `Tab` switches views, arrows move, `Enter` opens details, `/` searches,
+`e` exports, and **`?` opens a plain-English legend** of every term and key.
 
-## Supplying reference data
+---
 
-The validation gates are real and runnable; vigil simply ships **no fabricated
-data** for them. Templates and sourcing notes are in `data/reference/`.
+## How it works
 
-```sh
-vigil validate \
-  --recording      data/reference/recording.csv \
-  --perturbations  data/reference/perturbations.csv \
-  --sleep-dir      data
-```
+- **Cookie analysis** reads Firefox's `cookies.sqlite` and Chromium's `Cookies`
+  DB read-only (decrypting Chromium values in memory); tracking IDs are detected
+  by fingerprint, not a blocklist, so first-party trackers show up.
+- **Sync detection** hashes values to find the same ID across sites, attributing
+  the broker via the DuckDuckGo Tracker Radar dataset + a local override list.
+- **Flow capture** uses eBPF, resolves each IP's owner against a full ip2asn
+  table, and recovers hostnames via a DNS tap and reverse-DNS.
+- **Domain parsing** uses the Public Suffix List (`example.co.uk` handled right).
 
-- **Recordings** — whole-brain Ca²⁺ imaging (Kato et al. 2015; Nichols et al.
-  2017; Nguyen et al. 2016), as CSV: header of neuron names, rows of ΔF/F.
-- **Perturbations** — published ablation/optogenetic outcomes, as
-  `ablated|neurons, readout, effect(-1|0|1), citation`.
-- **EEG** — ≥ 5 subject-nights of Sleep-EDF (Kemp et al. 2000).
+Reference data is fetched by `fetch-data.sh` from publicsuffix.org, DuckDuckGo
+Tracker Radar, and iptoasn.com, then condensed locally.
 
-## Build
+---
 
-```sh
-cargo test --release     # 82 gates
-cargo run  --release -- claims
-```
+## Status
 
-Requires Rust 1.75+. CI builds on Linux and macOS, pins the connectome checksum,
-and **fails if a forbidden conclusion reappears in the output**.
-
-## Known limits
-
-Single-compartment neurons; no receptor modelling, no neuromodulation, no
-plasticity, no body/environment loop, and **unfitted synaptic polarity** — which
-is why the model fails the behavioural gate. The connectome is not the nervous
-system (cf. Bentley et al. 2016). Determinism is same-machine only.
-
-These are listed in full in [`FINDINGS.md`](FINDINGS.md). None of them is patched
-over.
-
-## License
-
-MIT OR Apache-2.0.
+A personal / research project, provided as-is under the [MIT License](LICENSE)
+with no warranty. Review the source — especially the eBPF component, which runs
+in kernel space — before running. Contributions and issues welcome.
