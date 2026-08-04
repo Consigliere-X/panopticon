@@ -111,15 +111,22 @@ Panopticon is a privacy tool, so it holds itself to a privacy standard. See
 
 ## Install
 
-**Requirements:** Linux, Rust 1.85+ (the crate uses edition 2024), Python 3 (for
-setup), and a supported browser — **Firefox** or a **Chromium-family** browser
-(see Browser Support below).
+**Requirements:** Linux (any distribution), Rust 1.85+ (the crate uses edition
+2024), Python 3 (for setup), and a supported browser — **Firefox** or a
+**Chromium-family** browser (see Browser Support below).
 
 Live flow capture additionally needs a recent kernel and an eBPF toolchain —
 nightly Rust with `rust-src`, plus `bpf-linker`. `build.sh` checks for these and
 tells you exactly what to install. If you don't want live capture, run
 `./build.sh --no-bpf`; everything else (cookies, PII, sync, reports) works
 without it.
+
+Cookie, PII and sync analysis is distribution-agnostic. Two things are
+best-effort outside Arch: naming the package behind a network flow (Panopticon
+queries `pacman`, `dpkg`, `rpm`, `apk` or `xbps-query`, and shows `unpackaged` if
+none of them answer), and the systemd unit, which assumes systemd. Only the
+`pacman` path has been tested on real hardware — reports from other
+distributions are welcome.
 
 ```bash
 git clone https://github.com/Consigliere-X/panopticon

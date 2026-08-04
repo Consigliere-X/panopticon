@@ -22,7 +22,10 @@ your sensitive data never leaves your control.
   never written to disk. If no keyring is reachable, affected cookies are skipped
   rather than mis-decrypted.
 - **Network flows** — via eBPF, the destination IP/port of outbound connections
-  (requires elevated privileges; see below).
+  (requires elevated privileges; see below). To name the program behind a flow,
+  Panopticon reads `/proc` and asks your package manager which package owns that
+  executable — it runs `pacman`, `dpkg`, `rpm`, `apk` or `xbps-query` in query-only
+  mode. Nothing is installed, removed or modified.
 - **DNS responses** — to map IPs back to domains.
 
 ## What it writes to disk
@@ -50,7 +53,8 @@ order of sensitivity:
 - `reports/` — reports you export with `e`. The *redacted* variants mask values
   and are meant to be shareable. The `*_pii_full.md` variant contains **decoded
   personal data in the clear** (email, name, location, device IDs) by design, so
-  you can see exactly what a site holds. It is written `chmod 600`, is never
+  you can see exactly what a site holds. It is created `0600` (the mode is set at
+  creation, not applied afterwards, so it is never briefly world-readable), is never
   produced unless you explicitly choose the full variant, and should not be
   shared or committed.
 
@@ -92,9 +96,10 @@ it.
   Because the fallback search walks your collections looking for the browser's
   storage entry, it can prompt for a collection unrelated to your browser. Cancel
   the prompt and the affected cookies are skipped rather than mis-decrypted.
-- **Live network flow capture** (eBPF) requires three capabilities, granted by the
+- **Live network flow capture** (eBPF) requires four capabilities, granted by the
   unit `install-service.sh` generates: `CAP_BPF` to load the program, `CAP_PERFMON`
-  to attach the kprobe, and `CAP_NET_ADMIN` for the network hook. The unit runs as
+  to attach the kprobe, `CAP_NET_ADMIN` for the network hook, and `CAP_NET_RAW` for
+  the passive DNS tap that turns destination IPs back into hostnames. The unit runs as
   *you*, not root, with `NoNewPrivileges`, `ProtectSystem=strict` and `ProtectHome=read-only`,
   and deliberately does **not** grant `CAP_DAC_READ_SEARCH` — that would let the
   daemon read any file on the system, and the only thing it buys is package
