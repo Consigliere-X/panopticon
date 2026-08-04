@@ -95,7 +95,9 @@ Panopticon is a privacy tool, so it holds itself to a privacy standard. See
   `data/sync_clusters.tsv` (that shared ID *is* the tracking evidence), and a
   full PII report contains decoded personal data if you explicitly export one.
 - Your browsing logs stay local and are git-ignored.
-- **No telemetry. Nothing is ever sent off your machine.**
+- **No telemetry.** Your cookies, browsing history and personal data never
+  leave your machine. Reverse-DNS lookups in the Flows tab do query your
+  system resolver — see [SECURITY.md](SECURITY.md).
 - Reads are read-only — Panopticon never modifies your browser.
 
 ---
