@@ -183,6 +183,24 @@ fn find_ff()->Vec<PathBuf>{ let home=std::env::var("HOME").unwrap_or_default();
 // Domain -> owning organisation, for telling "one company's own sites" apart from
 // "unrelated parties sharing an ID". Seeded in data/static/owners.tsv; extend it
 // freely, one `domain<TAB>Owner` per line.
+// Cookie names that identify the company that set them. When one of these turns up
+// on a host that company does NOT own, that is third-party tracking.
+fn org_by_name(name: &str) -> Option<String> {
+    let n=name.to_lowercase();
+    let hit=|o:&str|Some(o.to_string());
+    if n.starts_with("_cc_id")||n.starts_with("cto_")||n.starts_with("_pubcid"){ hit("Criteo") }
+    else if n.starts_with("unifiedid")||n.starts_with("pbjs-unifiedid")||n.starts_with("pbjs_unifiedid"){ hit("TradeDesk") }
+    else if n.starts_with("_ga")||n.starts_with("_gcl")||n=="nid"||n=="ide"||n=="aec"||n=="dv"{ hit("Google") }
+    else if n.starts_with("_fbp")||n=="fr"||n.starts_with("_fbc"){ hit("Meta") }
+    else if n.starts_with("muid")||n.starts_with("_uet"){ hit("Microsoft") }
+    else if n.starts_with("_pin_")||n.starts_with("_pinterest"){ hit("Pinterest") }
+    else if n.starts_with("__qca"){ hit("Quantcast") }
+    else if n.starts_with("_scid")||n.starts_with("_schn"){ hit("Snap") }
+    else if n.starts_with("_ttp")||n.starts_with("_tt_"){ hit("TikTok") }
+    else if n.starts_with("ajs_"){ hit("Twilio") }
+    else { None }
+}
+
 fn load_owners() -> std::collections::HashMap<String,String> {
     let mut m=std::collections::HashMap::new();
     if let Ok(txt)=std::fs::read_to_string("data/static/owners.tsv"){
@@ -213,7 +231,7 @@ pub fn run()->anyhow::Result<()>{
     let mut val_meta:HashMap<String,(String,String)>=HashMap::new(); // hash -> (cookie_name, org)
     let mut val_preview:HashMap<String,String>=HashMap::new(); // hash -> full shared value
     let mut val_detail:HashMap<String,(String,f64)>=HashMap::new(); // hash -> (host, entropy)
-    let mut rows:Vec<(String,String,String,i64,i32,f64,String,String,String,String)>=vec![]; // +value +detect +browser
+    let mut rows:Vec<(String,String,String,i64,i32,f64,String,String,String,String,String,String)>=vec![]; // +value +detect +browser +org +party
 
     let mut raw:Vec<(String,String,String,i64,i32,String)>=vec![];
     for db in find_ff(){
@@ -244,8 +262,28 @@ pub fn run()->anyhow::Result<()>{
         hn_values.entry(k).or_default().insert(value.clone());
     }
 
+    let owners_map=load_owners();
     for (host,name,value,exp,ss,browser) in raw {
         let e=entropy(&value);
+        // Attribute every cookie (not just high-entropy ones) via Tracker Radar, and
+        // record whether the attributed company OWNS the site the cookie sits on.
+        // Wikimedia on wikipedia.org is first-party; Criteo on a publisher is not.
+        // Two different signals, and which one fires IS the answer:
+        //   host matches Tracker Radar -> the cookie sits on a domain that company
+        //     owns, so it is first-party (GitHub on github.com).
+        //   host doesn't match, but the cookie NAME identifies a company (_cc_id ->
+        //     Criteo) -> that company's cookie on someone else's site: third-party.
+        let row_dom=etld1_psl(&host, &psl);
+        let row_bare=host.trim_start_matches('.').to_string();
+        let by_host=trackers.get(&row_bare).or_else(||trackers.get(&row_dom)).cloned()
+            .or_else(||owners_map.get(&row_dom).cloned());
+        let (row_org,party)=match by_host {
+            Some(o)=>(o,"first"),
+            None=>match org_by_name(&name) {
+                Some(o)=>(o,"third"),
+                None=>("-".to_string(),"-"),
+            },
+        };
         let vh=if value.len()>=10 && e>=3.0 {
             let mut h=Sha256::new(); h.update(value.as_bytes());
             let hh=format!("{:x}",h.finalize());
@@ -284,7 +322,7 @@ pub fn run()->anyhow::Result<()>{
             let tag=if same {"XBROWSER-SAME-ID"} else {"XBROWSER"};
             det = if det=="-" { tag.to_string() } else { format!("{det},{tag}") };
         }
-        rows.push((host.clone(),name,vh,exp,ss,e,etld1_psl(&host, &psl),clean,det,browser));
+        rows.push((host.clone(),name,vh,exp,ss,e,etld1_psl(&host, &psl),clean,det,browser,row_org,party.to_string()));
     }
 
     // which value-hashes are synced (>=2 distinct domains)
@@ -313,8 +351,8 @@ pub fn run()->anyhow::Result<()>{
 
     // write enriched detail
     let mut out=fs::File::create("data/cookies_detail.tsv")?;
-    writeln!(out,"host\tetld1\tname\tcategory\tsubtype\tentropy\texpiry\tsamesite\tsynced\tdetect\tvhash\tcandecode\tbrowser")?;
-    for (host,name,vh,exp,ss,e,dom,value,det,browser) in &rows {
+    writeln!(out,"host\tetld1\tname\tcategory\tsubtype\tentropy\texpiry\tsamesite\tsynced\tdetect\tvhash\tcandecode\tbrowser\torg\tparty")?;
+    for (host,name,vh,exp,ss,e,dom,value,det,browser,org,party) in &rows {
         let (cat,sub)=categorize(name,&cats);
         let ssn=match ss{0=>"none",1=>"lax",2=>"strict",_=>"?"};
         let persist=if *exp>0{"persistent"}else{"session"};
@@ -322,7 +360,7 @@ pub fn run()->anyhow::Result<()>{
             else if same_owner.contains(vh) {"SAME-OWNER"} else {"SYNCED"};
         let vh12=if vh.len()>=12{&vh[..12]}else{"-"};
         let cd=if decodable(value){"Y"}else{"N"};
-        writeln!(out,"{host}	{dom}	{name}	{cat}	{sub}	{e:.1}	{persist}	{ssn}	{syncf}	{det}	{vh12}	{cd}	{browser}")?;
+        writeln!(out,"{host}	{dom}	{name}	{cat}	{sub}	{e:.1}	{persist}	{ssn}	{syncf}	{det}	{vh12}	{cd}	{browser}	{org}	{party}")?;
     }
     // per-cookie partner lookup: this cookie's value-hash -> the OTHER domains sharing it
     // (written as host+name -> comma-domains so the TUI can show exact partners)

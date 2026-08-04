@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+libc = "0.2"
 anyhow = "1.0.104"
 aya = "0.14.0"
 aes = "0.8"

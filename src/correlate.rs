@@ -92,6 +92,22 @@ pub fn run() -> anyhow::Result<()> {
             .insert(f[1].trim_start_matches('.').to_string());
     }
 
+    // An org seen on at least one site it does not own is a third party.
+    // cookies.tsv has no party column, so derive it from the cookie_detail export
+    // when present, else treat everything as third party (the cautious default is
+    // to keep the entry visible rather than silently downgrade it).
+    let mut third_party: HashSet<String> = HashSet::new();
+    let mut first_party: HashSet<String> = HashSet::new();
+    for l in fs::read_to_string("data/cookies_detail.tsv").unwrap_or_default().lines().skip(1) {
+        let f: Vec<&str> = l.split('\t').collect();
+        if f.len() < 15 { continue; }
+        match f[14] {
+            "third" => { third_party.insert(parent(f[13]).to_string()); }
+            "first" => { first_party.insert(parent(f[13]).to_string()); }
+            _ => {}
+        }
+    }
+
     if cookie_orgs.is_empty() {
         eprintln!("[panopticon] warning: no tracker orgs in data/cookies.tsv \
                    — run --cookies first (and ./fetch-data.sh if you have not). \
@@ -141,12 +157,21 @@ pub fn run() -> anyhow::Result<()> {
         println!("  (none yet — run --watch during real browsing to populate flows.log)");
     }
 
-    println!("\n=== DORMANT TRACKERS (cookied, not seen on wire this session) ===");
+    println!("\n=== COOKIED, NOT SEEN ON WIRE THIS SESSION ===");
+    println!("  (third-party = present on sites it does not own; first-party = its own sites)");
     let mut dormant: Vec<_> = cookie_orgs.iter()
         .filter(|(o, _)| !live_orgs.contains_key(*o))
-        .map(|(o, s)| (s.len(), o.clone())).collect();
-    dormant.sort_by(|a, b| b.0.cmp(&a.0));
-    for (n, o) in dormant.iter().take(8) { println!("  · {o} ({n} sites)"); }
+        .map(|(o, s)| {
+            let p = if third_party.contains(o) {1u8}
+                    else if first_party.contains(o) {2} else {0};
+            (s.len(), o.clone(), p)
+        }).collect();
+    // third parties first — those are the ones following you across sites
+    dormant.sort_by(|a, b| (b.2==1).cmp(&(a.2==1)).then(b.0.cmp(&a.0)));
+    for (n, o, p) in dormant.iter().take(12) {
+        println!("  · {o} ({n} sites) [{}]",
+            match p {1=>"third-party",2=>"first-party",_=>"unattributed"});
+    }
 
     println!("\n=== SILENT TALKERS (egress, no DNS name, no known ASN) ===");
     if silent.is_empty() { println!("  (none)"); }

@@ -6,7 +6,7 @@ use std::{collections::{HashMap, HashSet}, fs, io, time::Duration};
 // ---------- data model ----------
 #[derive(Clone)]
 struct Cookie { host:String, dom:String, name:String, cat:String, sub:String,
-                entropy:f64, expiry:String, samesite:String, synced:bool, same_owner:bool, detect:String, vhash:String, candecode:bool, browser:String }
+                entropy:f64, expiry:String, samesite:String, synced:bool, same_owner:bool, detect:String, vhash:String, candecode:bool, browser:String, org:String, party:String }
 
 // map a cookie name to the org that owns it (for tracker attribution)
 fn cookie_org(name:&str)->Option<&'static str>{
@@ -32,10 +32,12 @@ fn load()->Vec<Cookie>{
                 detect:f.get(9).unwrap_or(&"-").to_string(),
                 vhash:f.get(10).unwrap_or(&"-").to_string(),
                 candecode:f.get(11).map(|x|*x=="Y").unwrap_or(false),
-                browser:f.get(12).unwrap_or(&"firefox").to_string()})}).collect()
+                browser:f.get(12).unwrap_or(&"firefox").to_string(),
+                org:f.get(13).unwrap_or(&"-").to_string(),
+                party:f.get(14).unwrap_or(&"-").to_string()})}).collect()
 }
 
-struct TrackerRow{ org:String, sites:usize, sync:usize,
+struct TrackerRow{ org:String, sites:usize, sync:usize, party:u8,
                    reach:u32, live:bool, topcat:String }
 
 #[derive(Clone,Copy,PartialEq)]
@@ -62,6 +64,7 @@ struct App{
     decoded:std::collections::HashMap<String,Vec<(String,bool)>>,
     detail_scroll:u16,
     show_help:bool,
+    help_scroll:u16,
     session_start:String,
     export:ExportStage,
     export_scope:String,
@@ -124,27 +127,39 @@ impl App{
 
     fn trackers(&self)->Vec<TrackerRow>{
         use std::collections::{HashMap,HashSet};
-        let mut m:HashMap<String,(HashSet<String>,usize,usize,HashMap<String,usize>)>=HashMap::new();
+        // Attribution comes from Tracker Radar via enrich (column `org`), falling back
+        // to the cookie-name heuristic only where Radar has no entry. `third` marks an
+        // org seen on at least one site it does not own — i.e. actually following you,
+        // as opposed to a first-party site you visited.
+        let mut m:HashMap<String,(HashSet<String>,usize,usize,HashMap<String,usize>,u8)>=HashMap::new();
         for c in &self.cookies{
-            if let Some(org)=cookie_org(&c.name){
-                let e=m.entry(org.to_string()).or_default();
+            let org = if c.org!="-" && !c.org.is_empty() { Some(c.org.clone()) }
+                      else { cookie_org(&c.name).map(|o|o.to_string()) };
+            if let Some(org)=org{
+                let e=m.entry(org).or_default();
                 e.0.insert(c.dom.clone()); e.1+=1; if c.synced{e.2+=1;}
                 *e.3.entry(c.cat.clone()).or_default()+=1;
+                match c.party.as_str(){
+                    "third"=>e.4=1,                       // definite: seen off its own sites
+                    "first" if e.4==0 => e.4=2,           // only ever on its own sites
+                    _=>{}                                 // unattributed: leave as unknown
+                }
             }
         }
         // total distinct sites in the whole jar (denominator for reach%)
         let total_sites:HashSet<String>=self.cookies.iter().map(|c|c.dom.clone()).collect();
         let total=total_sites.len().max(1);
         let live=self.live_orgs.lock().unwrap();
-        let mut v:Vec<TrackerRow>=m.into_iter().map(|(org,(sites,_cook,sync,cats))|{
+        let mut v:Vec<TrackerRow>=m.into_iter().map(|(org,(sites,_cook,sync,cats,third))|{
             // top data category for this tracker
             let topcat=cats.iter().max_by_key(|(_,n)|**n).map(|(c,_)|c.clone()).unwrap_or("-".into());
             let is_live=live.contains(&org);
             let reach=(sites.len() as f64/total as f64*100.0) as u32;
-            TrackerRow{ org, sites:sites.len(), sync, reach, live:is_live, topcat }
+            TrackerRow{ org, sites:sites.len(), sync, party:third, reach, live:is_live, topcat }
         }).collect();
         v.sort_by(|a,b|
-            (b.sync>0).cmp(&(a.sync>0))
+            (b.party==1).cmp(&(a.party==1))
+             .then((b.sync>0).cmp(&(a.sync>0)))
              .then(b.live.cmp(&a.live))
              .then(b.sites.cmp(&a.sites))
              .then(a.org.cmp(&b.org)));
@@ -475,7 +490,7 @@ pub fn run()->anyhow::Result<()>{
 
     let mut app=App{cookies, tab:Tab::Overview, sel:0,
                     expanded:false, voff:0,
-                    flows, live_orgs, cookie_rx, last_scan:std::time::Instant::now(), drill:None, decoded:std::collections::HashMap::new(), detail_scroll:0, show_help:false, session_start:chrono_now(), export:ExportStage::None, export_scope:String::new(), export_type:String::new(), export_msg:None, search:String::new(), searching:false, cat_filter:String::new(), br_filter:String::new()};
+                    flows, live_orgs, cookie_rx, last_scan:std::time::Instant::now(), drill:None, decoded:std::collections::HashMap::new(), detail_scroll:0, show_help:false, help_scroll:0, session_start:chrono_now(), export:ExportStage::None, export_scope:String::new(), export_type:String::new(), export_msg:None, search:String::new(), searching:false, cat_filter:String::new(), br_filter:String::new()};
 
     enable_raw_mode()?;
     let mut out=io::stdout();
@@ -502,15 +517,25 @@ pub fn run()->anyhow::Result<()>{
                 Tab::Flows=>draw_flows(f,z[1],app),
                 Tab::Personal=>draw_personal(f,z[1],app),
             }
-            if app.show_help { draw_help(f,z[1]); }
+            if app.show_help { draw_help(f,z[1],app.help_scroll); }
             draw_export(f,z[1],app);
             draw_footer(f,z[2],app);
         })?;
 
         if event::poll(Duration::from_millis(150))?{
             if let Event::Key(k)=event::read()?{
-                if app.show_help { app.show_help=false; continue; }
-                if matches!(k.code, KeyCode::Char('?')) { app.show_help=true; continue; }
+                if app.show_help {
+                    match k.code {
+                        KeyCode::Down|KeyCode::Char('j') => { app.help_scroll=app.help_scroll.saturating_add(1); }
+                        KeyCode::Up|KeyCode::Char('k')   => { app.help_scroll=app.help_scroll.saturating_sub(1); }
+                        KeyCode::PageDown                => { app.help_scroll=app.help_scroll.saturating_add(15); }
+                        KeyCode::PageUp                  => { app.help_scroll=app.help_scroll.saturating_sub(15); }
+                        KeyCode::Home                    => { app.help_scroll=0; }
+                        _ => { app.show_help=false; app.help_scroll=0; }
+                    }
+                    continue;
+                }
+                if matches!(k.code, KeyCode::Char('?')) { app.show_help=true; app.help_scroll=0; continue; }
                 if app.export_msg.is_some() { app.export_msg=None; continue; }
                 if app.export!=ExportStage::None {
                     let scope=app.export_scope.clone();
@@ -735,6 +760,8 @@ fn draw_overview(f:&mut Frame,a:Rect,app:&mut App){
         let namestyle = if selr{base.add_modifier(Modifier::REVERSED|Modifier::BOLD)}else{base};
         Row::new(vec![
             Text::from(t.org.clone()).style(namestyle),
+            Text::from(match t.party {1=>"third-party",2=>"first-party",_=>"unattributed"})
+                .style(Style::new().fg(match t.party {1=>Color::Red,2=>Color::Green,_=>Color::DarkGray})),
             Text::from(format!("{}",t.sites)).style(base),
             Text::from(format!("{} {}%",bar,t.reach)).style(Style::new().fg(Color::Cyan)),
             Text::from(t.topcat.clone()).style(Style::new().fg(cat_color(&t.topcat))),
@@ -743,9 +770,9 @@ fn draw_overview(f:&mut Frame,a:Rect,app:&mut App){
         ])
     }).collect();
     let confirmed=tr.iter().filter(|t|t.live).count();
-    let tbl=Table::new(rows,[Constraint::Min(14),Constraint::Length(6),Constraint::Length(20),
+    let tbl=Table::new(rows,[Constraint::Min(14),Constraint::Length(12),Constraint::Length(6),Constraint::Length(20),
         Constraint::Min(12),Constraint::Length(8),Constraint::Length(8)])
-        .header(Row::new(vec!["TRACKER","SITES","REACH (% of browsing)","TOP DATA","STATUS","SYNC"])
+        .header(Row::new(vec!["COMPANY","RELATIONSHIP","SITES","REACH (% of browsing)","TOP DATA","STATUS","SYNC"])
             .style(Style::new().bold().fg(Color::Yellow)))
         .block(Block::bordered().title(
             format!(" who is tracking you ({}) — {} active now — Enter=its cookies ",tr.len(),confirmed)));
@@ -1128,7 +1155,7 @@ fn draw_flows(f:&mut Frame,a:Rect,app:&mut App){
         .block(Block::bordered().title(title)), a);
 }
 
-fn draw_help(f:&mut Frame,a:Rect){
+fn draw_help(f:&mut Frame,a:Rect,scroll:u16){
     let y=Color::Yellow; let g=Color::Gray; let w=Color::White; let dk=Color::DarkGray;
     let title=|t:&str| Line::from(Span::styled(t.to_string(),Style::new().fg(y).bold()));
     let body=|t:&str| Line::from(Span::styled(format!("     {t}"),Style::new().fg(g)));
@@ -1195,6 +1222,13 @@ fn draw_help(f:&mut Frame,a:Rect){
         body("Email · Name · Location · Phone · IP address · Device ID. Shown decoded & readable."),
         blank(),
 
+        title("COMPANY / RELATIONSHIP — who is this, and are they following you?"),
+        body("first-party  a company on its own websites. Wikipedia setting a cookie on"),
+        body("             wikipedia.org is normal and not tracking across the web."),
+        body("third-party  present on sites it does NOT own — an ad or analytics company"),
+        body("             riding along on someone else's page. These are listed first."),
+        blank(),
+
         title("FLOWS — live internet connections leaving your computer"),
         item("ORG","The company that owns the server you're connecting to (Google, Cloudflare…)."),
         item("HOST","The server's name, if we can find it. '?' means the name is hidden/unpublished,"),
@@ -1222,11 +1256,15 @@ fn draw_help(f:&mut Frame,a:Rect){
         item("PgUp/PgDn","scroll inside a long cookie detail (Fn+↑/↓ on laptops)"),
     ];
     f.render_widget(Clear,a);
+    // clamp so paging past the end doesn't leave a blank pane
+    let max=(lines.len() as u16).saturating_sub(a.height.saturating_sub(2)).max(0);
+    let scroll=scroll.min(max);
     f.render_widget(Paragraph::new(lines)
+        .scroll((scroll,0))
         .wrap(ratatui::widgets::Wrap{trim:false})
         .block(Block::bordered()
             .border_style(Style::new().fg(Color::Yellow))
-            .title(" ? HELP — plain-English guide (any key closes) ")), a);
+            .title(" ? HELP — ↑/↓ PgUp/PgDn to scroll · any other key closes ")), a);
 }
 
 

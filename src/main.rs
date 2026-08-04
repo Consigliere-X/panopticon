@@ -73,6 +73,10 @@ fn parse_dns(b: &[u8]) -> Vec<(String, String)> {
 }
 
 fn main() {
+    // Rust ignores SIGPIPE by default, so `panopticon --correlate | head` panics with
+    // "failed printing to stdout" once head exits. Restore the Unix default: quiet exit.
+    #[cfg(unix)]
+    unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL); }
     let args: Vec<String> = env::args().collect();
     if args.iter().any(|a| a == "--chromium-check") { chromium::diagnostic().unwrap(); return; }
     if args.iter().any(|a| a == "--enrich") { enrich::run().unwrap(); return; }
