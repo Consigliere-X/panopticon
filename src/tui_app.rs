@@ -64,6 +64,7 @@ struct App{
     decoded:std::collections::HashMap<String,Vec<(String,bool)>>,
     detail_scroll:u16,
     show_help:bool,
+    refresh:std::sync::Arc<std::sync::atomic::AtomicBool>,
     help_scroll:u16,
     session_start:String,
     export:ExportStage,
@@ -477,9 +478,16 @@ pub fn run()->anyhow::Result<()>{
 
     // cookie re-scan thread: re-run enrich + reload every 3s, push fresh set
     let (ctx,cookie_rx)=std::sync::mpsc::channel();
+    // `r` sets this; the loop below wakes immediately instead of waiting out the tick.
+    let refresh_now=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let refresh_flag=refresh_now.clone();
     std::thread::spawn(move ||{
         loop{
-            std::thread::sleep(std::time::Duration::from_secs(3));
+            // poll in short slices so a manual refresh is not stuck behind the tick
+            for _ in 0..30 {
+                if refresh_flag.swap(false,std::sync::atomic::Ordering::Relaxed) { break; }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
             // silently re-enrich (reads Firefox sqlite), then reload the tsv
             let _=std::process::Command::new(std::env::current_exe().unwrap())
                 .arg("--enrich").output();
@@ -490,7 +498,7 @@ pub fn run()->anyhow::Result<()>{
 
     let mut app=App{cookies, tab:Tab::Overview, sel:0,
                     expanded:false, voff:0,
-                    flows, live_orgs, cookie_rx, last_scan:std::time::Instant::now(), drill:None, decoded:std::collections::HashMap::new(), detail_scroll:0, show_help:false, help_scroll:0, session_start:chrono_now(), export:ExportStage::None, export_scope:String::new(), export_type:String::new(), export_msg:None, search:String::new(), searching:false, cat_filter:String::new(), br_filter:String::new()};
+                    flows, live_orgs, cookie_rx, last_scan:std::time::Instant::now(), drill:None, decoded:std::collections::HashMap::new(), detail_scroll:0, show_help:false, help_scroll:0, refresh:refresh_now, session_start:chrono_now(), export:ExportStage::None, export_scope:String::new(), export_type:String::new(), export_msg:None, search:String::new(), searching:false, cat_filter:String::new(), br_filter:String::new()};
 
     enable_raw_mode()?;
     let mut out=io::stdout();
@@ -637,6 +645,10 @@ pub fn run()->anyhow::Result<()>{
                         let cur=names.iter().position(|c|c==&app.cat_filter).unwrap_or(0);
                         app.cat_filter=names[(cur+1)%names.len()].clone();
                         app.sel=0; app.voff=0;
+                    }
+                    KeyCode::Char('r') if app.drill.is_none() && !app.searching =>{
+                        app.refresh.store(true,std::sync::atomic::Ordering::Relaxed);
+                        app.export_msg=Some("refreshing…".into());
                     }
                     KeyCode::Char('b') if matches!(app.tab,Tab::Cookies) && app.drill.is_none() && !app.searching =>{
                         // cycle: all browsers -> each browser present, in stable order
@@ -1252,6 +1264,7 @@ fn draw_help(f:&mut Frame,a:Rect,scroll:u16){
         item("Esc","go back / close            /      search"),
         item("← →","filter by category (Cookies tab)"),
         item("b","filter by browser (Cookies tab) — cycles firefox / chrome / brave / …"),
+        item("r","re-read your cookies now (they also refresh on their own every 3s)"),
         item("d","decode the selected cookie  ?  this help   q  quit"),
         item("PgUp/PgDn","scroll inside a long cookie detail (Fn+↑/↓ on laptops)"),
     ];
@@ -1638,6 +1651,7 @@ fn draw_footer(f:&mut Frame,a:Rect,app:&App){
         Span::styled(" d ",Style::new().bg(Color::DarkGray)),Span::raw(" decode  "),
         Span::styled(" / ",Style::new().bg(Color::DarkGray)),Span::raw(" search  "),
         Span::styled(" b ",Style::new().bg(Color::DarkGray)),Span::raw(" browser  "),
+        Span::styled(" r ",Style::new().bg(Color::DarkGray)),Span::raw(" refresh  "),
         Span::styled(" e ",Style::new().bg(Color::DarkGray)),Span::raw(" export  "),Span::styled(" ? ",Style::new().bg(Color::DarkGray)),Span::raw(" help  "),Span::styled(" q ",Style::new().bg(Color::DarkGray)),Span::raw(" quit "),
     ])).block(Block::bordered());
     f.render_widget(help,a);
