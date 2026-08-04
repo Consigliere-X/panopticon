@@ -65,6 +65,7 @@ struct App{
     detail_scroll:u16,
     show_help:bool,
     refresh:std::sync::Arc<std::sync::atomic::AtomicBool>,
+    status:Option<(String,std::time::Instant)>,
     help_scroll:u16,
     session_start:String,
     export:ExportStage,
@@ -498,7 +499,7 @@ pub fn run()->anyhow::Result<()>{
 
     let mut app=App{cookies, tab:Tab::Overview, sel:0,
                     expanded:false, voff:0,
-                    flows, live_orgs, cookie_rx, last_scan:std::time::Instant::now(), drill:None, decoded:std::collections::HashMap::new(), detail_scroll:0, show_help:false, help_scroll:0, refresh:refresh_now, session_start:chrono_now(), export:ExportStage::None, export_scope:String::new(), export_type:String::new(), export_msg:None, search:String::new(), searching:false, cat_filter:String::new(), br_filter:String::new()};
+                    flows, live_orgs, cookie_rx, last_scan:std::time::Instant::now(), drill:None, decoded:std::collections::HashMap::new(), detail_scroll:0, show_help:false, help_scroll:0, refresh:refresh_now, status:None, session_start:chrono_now(), export:ExportStage::None, export_scope:String::new(), export_type:String::new(), export_msg:None, search:String::new(), searching:false, cat_filter:String::new(), br_filter:String::new()};
 
     enable_raw_mode()?;
     let mut out=io::stdout();
@@ -648,7 +649,7 @@ pub fn run()->anyhow::Result<()>{
                     }
                     KeyCode::Char('r') if app.drill.is_none() && !app.searching =>{
                         app.refresh.store(true,std::sync::atomic::Ordering::Relaxed);
-                        app.export_msg=Some("refreshing…".into());
+                        app.status=Some(("refreshing…".into(),std::time::Instant::now()));
                     }
                     KeyCode::Char('b') if matches!(app.tab,Tab::Cookies) && app.drill.is_none() && !app.searching =>{
                         // cycle: all browsers -> each browser present, in stable order
@@ -695,6 +696,10 @@ fn draw_tabs(f:&mut Frame,a:Rect,app:&App){
             Span::raw(format!(" {} cookies ",app.cookies.len())),
             Span::styled(if app.flows.lock().unwrap().is_empty(){" ○ "}else{" ● LIVE "},
                 Style::new().fg(if app.flows.lock().unwrap().is_empty(){Color::DarkGray}else{Color::Green}).bold()),
+            Span::styled(match &app.status {
+                    Some((m,t)) if t.elapsed()<std::time::Duration::from_secs(2)=>format!(" {m} "),
+                    _=>String::new(),
+                }, Style::new().fg(Color::Yellow)),
         ])))
         .highlight_style(Style::new().fg(Color::Black).bg(Color::Yellow).bold())
         .divider("│");
