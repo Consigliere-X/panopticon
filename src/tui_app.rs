@@ -6,13 +6,7 @@ use std::{collections::{HashMap, HashSet}, fs, io, time::Duration};
 // ---------- data model ----------
 #[derive(Clone)]
 struct Cookie { host:String, dom:String, name:String, cat:String, sub:String,
-                entropy:f64, expiry:String, samesite:String, synced:bool, value:String, detect:String, vhash:String, candecode:bool, browser:String }
-
-fn parent(o:&str)->&str{let l=o.to_lowercase();
-    if l.contains("google"){"Google"}else if l.contains("meta")||l.contains("facebook"){"Meta"}
-    else if l.contains("microsoft"){"Microsoft"}else if l.contains("segment")||l.contains("twilio"){"Twilio"}
-    else if l.contains("pinterest"){"Pinterest"}else if l.contains("quantcast"){"Quantcast"}
-    else if l.contains("criteo"){"Criteo"}else if l.contains("trade"){"TradeDesk"}else{o}}
+                entropy:f64, expiry:String, samesite:String, synced:bool, detect:String, vhash:String, candecode:bool, browser:String }
 
 // map a cookie name to the org that owns it (for tracker attribution)
 fn cookie_org(name:&str)->Option<&'static str>{
@@ -35,14 +29,13 @@ fn load()->Vec<Cookie>{
             Some(Cookie{host:f[0].into(),dom:f[1].into(),name:f[2].into(),cat:f[3].into(),
                 sub:f[4].into(),entropy:f[5].parse().unwrap_or(0.0),expiry:f[6].into(),
                 samesite:f[7].into(),synced:f[8]=="SYNCED",
-                value:String::new(),  // NOT from disk — fetched live from SQLite on demand
                 detect:f.get(9).unwrap_or(&"-").to_string(),
                 vhash:f.get(10).unwrap_or(&"-").to_string(),
                 candecode:f.get(11).map(|x|*x=="Y").unwrap_or(false),
                 browser:f.get(12).unwrap_or(&"firefox").to_string()})}).collect()
 }
 
-struct TrackerRow{ org:String, sites:usize, cookies:usize, sync:usize,
+struct TrackerRow{ org:String, sites:usize, sync:usize,
                    reach:u32, live:bool, topcat:String }
 
 #[derive(Clone,Copy,PartialEq)]
@@ -143,12 +136,12 @@ impl App{
         let total_sites:HashSet<String>=self.cookies.iter().map(|c|c.dom.clone()).collect();
         let total=total_sites.len().max(1);
         let live=self.live_orgs.lock().unwrap();
-        let mut v:Vec<TrackerRow>=m.into_iter().map(|(org,(sites,cook,sync,cats))|{
+        let mut v:Vec<TrackerRow>=m.into_iter().map(|(org,(sites,_cook,sync,cats))|{
             // top data category for this tracker
             let topcat=cats.iter().max_by_key(|(_,n)|**n).map(|(c,_)|c.clone()).unwrap_or("-".into());
             let is_live=live.contains(&org);
             let reach=(sites.len() as f64/total as f64*100.0) as u32;
-            TrackerRow{ org, sites:sites.len(), cookies:cook, sync, reach, live:is_live, topcat }
+            TrackerRow{ org, sites:sites.len(), sync, reach, live:is_live, topcat }
         }).collect();
         v.sort_by(|a,b|
             (b.sync>0).cmp(&(a.sync>0))
@@ -184,14 +177,6 @@ impl App{
             let e=m.entry(c.cat.clone()).or_default(); e.0+=1; e.1+=c.entropy; }
         let mut v:Vec<_>=m.into_iter().map(|(k,(n,es))|(k,n,es/n as f64)).collect();
         v.sort_by(|a,b|b.1.cmp(&a.1));
-        v
-    }
-
-    fn sync_domains(&self)->Vec<(String,usize)>{ // domains involved in a sync, #synced cookies
-        let mut m:HashMap<String,usize>=HashMap::new();
-        for c in &self.cookies{ if c.synced{*m.entry(c.dom.clone()).or_default()+=1;} }
-        let mut v:Vec<_>=m.into_iter().collect();
-        v.sort_by(|a,b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
         v
     }
 
@@ -1276,14 +1261,6 @@ fn md_table(headers:&[&str], rows:&[Vec<String>])->String{
 ");
     }
     o
-}
-
-fn redact_email(s:&str)->String{
-    if let Some(at)=s.find('@'){
-        let first=s.chars().next().unwrap_or('*');
-        return format!("{}***{}",first,&s[at..]);
-    }
-    "[redacted]".into()
 }
 
 fn pii_kinds(detect:&str)->Vec<&'static str>{

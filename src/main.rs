@@ -77,9 +77,6 @@ fn main() {
     if args.iter().any(|a| a == "--chromium-check") { chromium::diagnostic().unwrap(); return; }
     if args.iter().any(|a| a == "--enrich") { enrich::run().unwrap(); return; }
     if args.iter().any(|a| a == "--sync") { sync::run().unwrap(); return; }
-    if args.iter().any(|a| a == "--tui | --sync") { tui::run().unwrap(); return; }
-    if args.iter().any(|a| a == "--correlate | --tui") { correlate::run().unwrap(); return; }
-    if args.iter().any(|a| a == "--cookies | --correlate") { cookies::run().unwrap(); return; }
     if args.iter().any(|a| a == "--watch") { flow::run().unwrap(); return; }
     if args.iter().any(|a| a == "--cookies") { cookies::run().unwrap(); return; }
     if args.iter().any(|a| a == "--correlate") { correlate::run().unwrap(); return; }

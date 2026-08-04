@@ -32,13 +32,6 @@ use std::{fs, io::Write,
 type Clients = Arc<Mutex<Vec<UnixStream>>>;
 
 // ASN loading moved to crate::asn::AsnDb
-fn parent(o: &str) -> &str {
-    let l=o.to_lowercase();
-    if l.contains("google"){"Google"} else if l.contains("meta")||l.contains("facebook"){"Meta"}
-    else if l.contains("microsoft"){"Microsoft"} else if l.contains("amazon"){"Amazon"}
-    else if l.contains("cloudflare"){"Cloudflare"} else if l.contains("fastly"){"Fastly"}
-    else if l.contains("segment")||l.contains("twilio"){"Twilio"} else {o}
-}
 // asn lookup moved to AsnDb::lookup
 
 // accept loop: register each new TUI connection
