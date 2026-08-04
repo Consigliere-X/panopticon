@@ -1,0 +1,58 @@
+# domain<TAB>owning organisation
+#
+# Used to tell "one company's own sites sharing an identifier" apart from
+# "unrelated parties linked by a broker". If every domain in a sync cluster maps
+# to the same owner here, the cluster is reported as SAME-OWNER rather than as
+# cross-site sharing.
+#
+# This is deliberately small and conservative: an unknown domain is treated as
+# NOT same-owner, so the stronger claim is never made on a guess. Add your own
+# lines freely — one domain and owner per line, separated by a tab.
+wikipedia.org	Wikimedia Foundation
+wikibooks.org	Wikimedia Foundation
+wikidata.org	Wikimedia Foundation
+wikimedia.org	Wikimedia Foundation
+wikiquote.org	Wikimedia Foundation
+wikisource.org	Wikimedia Foundation
+wikiversity.org	Wikimedia Foundation
+wikivoyage.org	Wikimedia Foundation
+wiktionary.org	Wikimedia Foundation
+mediawiki.org	Wikimedia Foundation
+google.com	Google
+google.co.in	Google
+google.co.uk	Google
+google.de	Google
+google.fr	Google
+google.ca	Google
+google.com.au	Google
+youtube.com	Google
+youtu.be	Google
+googlevideo.com	Google
+blogger.com	Google
+facebook.com	Meta
+instagram.com	Meta
+whatsapp.com	Meta
+threads.net	Meta
+microsoft.com	Microsoft
+live.com	Microsoft
+bing.com	Microsoft
+office.com	Microsoft
+linkedin.com	Microsoft
+github.com	Microsoft
+amazon.com	Amazon
+amazon.in	Amazon
+amazon.co.uk	Amazon
+twitch.tv	Amazon
+apple.com	Apple
+icloud.com	Apple
+mozilla.org	Mozilla
+firefox.com	Mozilla
+openai.com	OpenAI
+chatgpt.com	OpenAI
+oaistatic.com	OpenAI
+anthropic.com	Anthropic
+claude.ai	Anthropic
+reddit.com	Reddit
+redd.it	Reddit
+stackoverflow.com	Stack Exchange
+stackexchange.com	Stack Exchange

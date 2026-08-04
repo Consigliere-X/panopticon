@@ -4,6 +4,7 @@
 !/data/static/
 /data/static/*
 !/data/static/trackers_override.tsv
+!/data/static/owners.tsv
 
 # Logs & runtime TSVs live under data/ (covered above). These catch any that escape:
 /dns.log

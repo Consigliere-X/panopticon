@@ -6,7 +6,7 @@ use std::{collections::{HashMap, HashSet}, fs, io, time::Duration};
 // ---------- data model ----------
 #[derive(Clone)]
 struct Cookie { host:String, dom:String, name:String, cat:String, sub:String,
-                entropy:f64, expiry:String, samesite:String, synced:bool, detect:String, vhash:String, candecode:bool, browser:String }
+                entropy:f64, expiry:String, samesite:String, synced:bool, same_owner:bool, detect:String, vhash:String, candecode:bool, browser:String }
 
 // map a cookie name to the org that owns it (for tracker attribution)
 fn cookie_org(name:&str)->Option<&'static str>{
@@ -28,7 +28,7 @@ fn load()->Vec<Cookie>{
             if f.len()<9{return None;}
             Some(Cookie{host:f[0].into(),dom:f[1].into(),name:f[2].into(),cat:f[3].into(),
                 sub:f[4].into(),entropy:f[5].parse().unwrap_or(0.0),expiry:f[6].into(),
-                samesite:f[7].into(),synced:f[8]=="SYNCED",
+                samesite:f[7].into(),synced:f[8]=="SYNCED", same_owner:f[8]=="SAME-OWNER",
                 detect:f.get(9).unwrap_or(&"-").to_string(),
                 vhash:f.get(10).unwrap_or(&"-").to_string(),
                 candecode:f.get(11).map(|x|*x=="Y").unwrap_or(false),
@@ -1182,9 +1182,12 @@ fn draw_help(f:&mut Frame,a:Rect){
         blank(),
 
         title("SYNC  (⇄ symbol)"),
-        body("The SAME ID value was found on several different websites. That means those"),
-        body("sites (or an ad broker like Criteo/Google) are sharing your identity to build"),
-        body("one combined profile of everything you do. This is how tracking networks connect."),
+        body("The SAME ID value was found on several different websites. Whoever set it can"),
+        body("tell those visits belong to one person — that is what makes it worth showing."),
+        body("It is strong evidence, not proof of a deal: sometimes an ad broker is linking"),
+        body("sites deliberately, sometimes one company simply uses one cookie across its own"),
+        body("properties. When Panopticon can tell the domains share an owner it says"),
+        body("\"same owner\" instead, and only unrelated parties are flagged red."),
         blank(),
 
         title("PERSONAL DATA (PII) — your actual identity in a cookie"),
@@ -1545,10 +1548,15 @@ fn draw_footer(f:&mut Frame,a:Rect,app:&App){
                     Span::styled(
                         if c.synced {
                             let ps=sync_partners(&c.vhash,&c.dom);
-                            if ps.is_empty(){"⇄ SYNCED (partner domain not resolved)".to_string()}
-                            else{format!("⇄ SHARED WITH: {}", ps.join(", "))}
+                            if ps.is_empty(){"⇄ same value seen on another site (partner not resolved)".to_string()}
+                            else{format!("⇄ SAME VALUE ALSO ON: {} — these sites can be linked", ps.join(", "))}
+                        } else if c.same_owner {
+                            let ps=sync_partners(&c.vhash,&c.dom);
+                            format!("⇄ also on {} — same owner, not third-party sharing",
+                                if ps.is_empty(){"the same company's other sites".to_string()}else{ps.join(", ")})
                         } else {"not shared".to_string()},
-                        Style::new().fg(if c.synced{Color::Red}else{Color::Green}).bold())]),
+                        Style::new().fg(if c.synced{Color::Red}
+                            else if c.same_owner{Color::Yellow}else{Color::Green}).bold())]),
                 Line::from(vec![Span::styled("DETECTED IN VALUE: ",Style::new().fg(Color::LightRed).bold()),
                     Span::styled(if c.detect=="-"{"opaque identifier (no decodable fields)".to_string()}
                                  else{c.detect.clone()},

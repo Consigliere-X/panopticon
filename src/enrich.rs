@@ -180,6 +180,23 @@ fn find_ff()->Vec<PathBuf>{ let home=std::env::var("HOME").unwrap_or_default();
             let db=e.path().join("cookies.sqlite"); if db.exists(){o.push(db);} } }
     o }
 
+// Domain -> owning organisation, for telling "one company's own sites" apart from
+// "unrelated parties sharing an ID". Seeded in data/static/owners.tsv; extend it
+// freely, one `domain<TAB>Owner` per line.
+fn load_owners() -> std::collections::HashMap<String,String> {
+    let mut m=std::collections::HashMap::new();
+    if let Ok(txt)=std::fs::read_to_string("data/static/owners.tsv"){
+        for l in txt.lines(){
+            let l=l.trim();
+            if l.is_empty()||l.starts_with('#'){ continue; }
+            if let Some((dom,owner))=l.split_once('\t'){
+                m.insert(dom.trim().to_string(), owner.trim().to_string());
+            }
+        }
+    }
+    m
+}
+
 pub fn run()->anyhow::Result<()>{
     fs::create_dir_all("data").ok();
     let psl=load_psl();
@@ -274,6 +291,26 @@ pub fn run()->anyhow::Result<()>{
     let synced:std::collections::HashSet<&String> = val_hosts.iter()
         .filter(|(_,d)|d.len()>=2).map(|(h,_)|h).collect();
 
+    // A value on several domains that all belong to the SAME owner (the Wikimedia
+    // sites; google.com + google.co.in) is one company's cookie on its own
+    // properties — strong evidence of a shared identifier, but NOT evidence that a
+    // broker linked identities across unrelated parties. Tag those separately so
+    // the UI stops calling them cross-site sharing.
+    let owners=load_owners();
+    let owner_of=|dom:&str|->Option<String>{
+        owners.get(dom).cloned().or_else(||trackers.get(dom).cloned())
+    };
+    let same_owner:std::collections::HashSet<&String> = val_hosts.iter()
+        .filter(|(_,d)|d.len()>=2)
+        .filter(|(_,d)|{
+            let mut seen=std::collections::HashSet::new();
+            for dom in d.iter(){
+                match owner_of(dom){ Some(o)=>{seen.insert(o);}, None=>return false }
+            }
+            seen.len()==1
+        })
+        .map(|(h,_)|h).collect();
+
     // write enriched detail
     let mut out=fs::File::create("data/cookies_detail.tsv")?;
     writeln!(out,"host\tetld1\tname\tcategory\tsubtype\tentropy\texpiry\tsamesite\tsynced\tdetect\tvhash\tcandecode\tbrowser")?;
@@ -281,7 +318,8 @@ pub fn run()->anyhow::Result<()>{
         let (cat,sub)=categorize(name,&cats);
         let ssn=match ss{0=>"none",1=>"lax",2=>"strict",_=>"?"};
         let persist=if *exp>0{"persistent"}else{"session"};
-        let syncf=if !vh.is_empty() && synced.contains(vh){"SYNCED"}else{"-"};
+        let syncf=if vh.is_empty() || !synced.contains(vh) {"-"}
+            else if same_owner.contains(vh) {"SAME-OWNER"} else {"SYNCED"};
         let vh12=if vh.len()>=12{&vh[..12]}else{"-"};
         let cd=if decodable(value){"Y"}else{"N"};
         writeln!(out,"{host}	{dom}	{name}	{cat}	{sub}	{e:.1}	{persist}	{ssn}	{syncf}	{det}	{vh12}	{cd}	{browser}")?;

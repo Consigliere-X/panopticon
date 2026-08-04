@@ -81,11 +81,14 @@ pub fn run() -> anyhow::Result<()> {
     let asn = load_asn();
 
     // --- org -> set of sites it cookied (from P2) ---
+    // cookies.tsv columns: browser(0) host(1) name(2) tracker_org(3) id_kind(4) flags(5)
+    // The org is column 3. Column 4 is the identifier *kind* ("ad-id", "cross-site
+    // ID") and must not be treated as a company name.
     let mut cookie_orgs: HashMap<String, HashSet<String>> = HashMap::new();
     for l in fs::read_to_string("data/cookies.tsv").unwrap_or_default().lines().skip(1) {
         let f: Vec<&str> = l.split('\t').collect();
-        if f.len() < 5 || f[4] == "-" { continue; }
-        cookie_orgs.entry(parent(f[4]).to_string()).or_default()
+        if f.len() < 6 || f[3] == "-" { continue; }
+        cookie_orgs.entry(parent(f[3]).to_string()).or_default()
             .insert(f[1].trim_start_matches('.').to_string());
     }
 
