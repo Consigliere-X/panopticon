@@ -1,9 +1,4 @@
-use std::{collections::{HashMap, HashSet, BTreeMap}, fs, net::Ipv4Addr};
-
-fn ip_to_u32(s: &str) -> Option<u32> {
-    s.parse::<Ipv4Addr>().ok().map(|a| u32::from(a))
-}
-
+use std::{collections::{HashMap, HashSet, BTreeMap}, fs};
 
 // collapse "Google Analytics", "Google Ads", "Google DoubleClick" -> "Google"
 fn parent(org: &str) -> &str {
@@ -19,53 +14,14 @@ fn parent(org: &str) -> &str {
 }
 
 
-fn ip6_to_u128(s: &str) -> Option<u128> {
-    s.parse::<std::net::Ipv6Addr>().ok().map(u128::from)
-}
-
-fn cidr6_match(ip: &str, net: &str, bits: u32) -> bool {
-    match (ip6_to_u128(ip), ip6_to_u128(net)) {
-        (Some(v), Some(n)) => {
-            let mask = if bits == 0 { 0u128 } else { u128::MAX << (128 - bits) };
-            (v & mask) == (n & mask)
-        }
-        _ => false,
-    }
-}
-
 // (network_u32, mask_bits, org)
-fn load_asn() -> Vec<(String, u32, String)> {
-    fs::read_to_string("data/asn_ranges.txt").unwrap_or_default().lines()
-        .filter_map(|l| {
-            let (cidr, org) = l.split_once('\t')?;
-            let (net, bits) = cidr.split_once('/')?;
-            let b: u32 = bits.parse().ok()?;
-            Some((net.to_string(), b, org.to_string()))
-        }).collect()
-}
+// ASN data lives in data/static/asn_v4.tsv + asn_v6.tsv (written by fetch-data.sh)
+// and is loaded by the shared AsnDb, which binary-searches it. This used to read a
+// data/asn_ranges.txt that nothing ever produced, so every lookup here returned None.
+fn load_asn() -> crate::asn::AsnDb { crate::asn::AsnDb::load() }
 
-fn asn_lookup(ip: &str, table: &[(String, u32, String)]) -> Option<String> {
-    let is_v6 = ip.contains(':');
-    for (net, bits, org) in table {
-        let net_v6 = net.contains(':');
-        if net_v6 != is_v6 { continue; }
-        let hit = if is_v6 {
-            cidr6_match(ip, net, *bits)
-        } else {
-            match (ip_to_u32(ip), ip_to_u32(net)) {
-                (Some(v), Some(n)) => {
-                    let mask = if *bits == 0 { 0 } else { u32::MAX << (32 - bits) };
-                    (v & mask) == (n & mask)
-                }
-                _ => false,
-            }
-        };
-        if hit { return Some(org.clone()); }
-    }
-    None
-}
+fn asn_lookup(ip: &str, table: &crate::asn::AsnDb) -> Option<String> { table.lookup(ip) }
 
-// Shannon entropy of the domain label — high = random-looking (DGA / opaque endpoint)
 fn label_entropy(host: &str) -> f64 {
     let label = host.split('.').next().unwrap_or(host);
     if label.is_empty() { return 0.0; }

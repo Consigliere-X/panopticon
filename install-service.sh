@@ -33,12 +33,13 @@ WorkingDirectory=$ROOT
 User=$RUN_AS
 
 # Least privilege: CAP_BPF loads the program, CAP_PERFMON attaches the kprobe,
-# CAP_NET_ADMIN is needed for the network hook. Nothing else is granted — in
-# particular NOT CAP_DAC_READ_SEARCH, which would let this read any file on the
-# system. Without it, process->package attribution may show "?" for processes
-# owned by other users; that is the intended trade.
-CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN
-AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_NET_ADMIN
+# CAP_NET_ADMIN is needed for the network hook, and CAP_NET_RAW lets the DNS tap
+# open its raw socket (without it, flow hostnames stay "?"). Nothing else is
+# granted — in particular NOT CAP_DAC_READ_SEARCH, which would let this read any
+# file on the system. Without that, process->package attribution may show "?" for
+# processes owned by other users; that is the intended trade.
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_NET_RAW
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only

@@ -15,10 +15,31 @@ fn dns_cache() -> HashMap<String, String> {
 
 fn package_of(exe: &str, c: &mut HashMap<String, String>) -> String {
     if let Some(p) = c.get(exe) { return p.clone(); }
-    let pkg = Command::new("pacman").args(["-Qoq", exe]).output().ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .filter(|s| !s.is_empty()).unwrap_or_else(|| "unpackaged".into());
+    // Ask whichever package manager this distro has. Panopticon itself is
+    // distro-agnostic; only this attribution step is, so an unknown distro
+    // degrades to "unpackaged" rather than failing.
+    let probes: [(&str, &[&str]); 5] = [
+        ("pacman", &["-Qoq"]),                  // Arch
+        ("dpkg",   &["-S"]),                    // Debian/Ubuntu
+        ("rpm",    &["-qf", "--queryformat", "%{NAME}"]), // Fedora/RHEL/SUSE
+        ("apk",    &["info", "--who-owns"]),    // Alpine
+        ("xbps-query", &["-o"]),                // Void
+    ];
+    let mut pkg = String::new();
+    for (bin, args) in probes {
+        let out = Command::new(bin).args(args).arg(exe).output();
+        if let Ok(o) = out {
+            if o.status.success() {
+                let t = String::from_utf8_lossy(&o.stdout);
+                // dpkg -S prints "pkg: /path"; apk prints "/path is owned by pkg-1.2"
+                let t = t.split(':').next().unwrap_or("")
+                    .rsplit(" is owned by ").next().unwrap_or("")
+                    .trim().to_string();
+                if !t.is_empty() { pkg = t; break; }
+            }
+        }
+    }
+    let pkg = if pkg.is_empty() { "unpackaged".to_string() } else { pkg };
     c.insert(exe.into(), pkg.clone()); pkg
 }
 

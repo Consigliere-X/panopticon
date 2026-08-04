@@ -9,6 +9,15 @@ struct Cookie { host:String, dom:String, name:String, cat:String, sub:String,
                 entropy:f64, expiry:String, samesite:String, synced:bool, same_owner:bool, detect:String, vhash:String, candecode:bool, browser:String, org:String, party:String }
 
 // map a cookie name to the org that owns it (for tracker attribution)
+// Single source of truth for "which company set this cookie": the enriched
+// Tracker Radar attribution when we have it, else the cookie-name heuristic.
+// Overview, the Sites drill-down and the per-org drill MUST agree, or a company
+// appears with different site counts depending on which view you came from.
+fn org_of(c:&Cookie)->Option<String>{
+    if c.org!="-" && !c.org.is_empty() { Some(c.org.clone()) }
+    else { cookie_org(&c.name).map(|o|o.to_string()) }
+}
+
 fn cookie_org(name:&str)->Option<&'static str>{
     let n=name.to_lowercase();
     if n.starts_with("_ga")||n.starts_with("_gid")||n.starts_with("_gcl")||n=="ide"||n=="nid"||n=="consent"{Some("Google")}
@@ -135,8 +144,7 @@ impl App{
         // as opposed to a first-party site you visited.
         let mut m:HashMap<String,(HashSet<String>,usize,usize,HashMap<String,usize>,u8)>=HashMap::new();
         for c in &self.cookies{
-            let org = if c.org!="-" && !c.org.is_empty() { Some(c.org.clone()) }
-                      else { cookie_org(&c.name).map(|o|o.to_string()) };
+            let org = org_of(c);
             if let Some(org)=org{
                 let e=m.entry(org).or_default();
                 e.0.insert(c.dom.clone()); e.1+=1; if c.synced{e.2+=1;}
@@ -173,7 +181,7 @@ impl App{
         for c in &self.cookies{
             let e=m.entry(c.dom.clone()).or_default();
             e.0+=1;
-            if let Some(o)=cookie_org(&c.name){e.1.insert(o.into());}
+            if let Some(o)=org_of(c){e.1.insert(o);}
             *e.2.entry(c.cat.clone()).or_default()+=1;
         }
         let q=self.search.to_lowercase();
@@ -209,7 +217,7 @@ impl App{
     }
     fn cookies_for_org(&self, org:&str)->Vec<&Cookie>{
         let mut v:Vec<&Cookie>=self.cookies.iter()
-            .filter(|c|cookie_org(&c.name)==Some(org)).collect();
+            .filter(|c|org_of(c).as_deref()==Some(org)).collect();
         v.sort_by(|a,b| b.entropy.partial_cmp(&a.entropy).unwrap());
         v
     }
@@ -1336,7 +1344,7 @@ fn pii_kinds(detect:&str)->Vec<&'static str>{
 fn scoped<'a>(app:&'a App, scope:&str)->Vec<&'a Cookie>{
     match scope {
         "all"=>app.cookies.iter().collect(),
-        s=>app.cookies.iter().filter(|c| c.dom==s || cookie_org(&c.name)==Some(s)).collect(),
+        s=>app.cookies.iter().filter(|c| c.dom==s || org_of(c).as_deref()==Some(s)).collect(),
     }
 }
 
@@ -1511,7 +1519,15 @@ fn write_report(app:&App, scope:&str, rtype:&str, redact:bool)->std::io::Result<
     let safe=scope.replace(['/','.',' '],"_");
     let tag=if rtype=="pii" && !redact {"pii_full"} else {rtype};
     let fname=format!("data/reports/{}_{}_{}.md", now.replace([':',' '],"-"), safe, tag);
-    let mut f=std::fs::File::create(&fname)?;
+    // Create the file with 0600 already set rather than chmod-ing after the fact:
+    // otherwise it exists world-readable for the window between the two calls.
+    let mut f={
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut o=std::fs::OpenOptions::new();
+        o.write(true).create(true).truncate(true);
+        if private { o.mode(0o600); }
+        o.open(&fname)?
+    };
     f.write_all(body.as_bytes())?;
     #[cfg(unix)]
     if private { use std::os::unix::fs::PermissionsExt;
