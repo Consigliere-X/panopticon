@@ -16,9 +16,17 @@ fn id_kind(name: &str, ids: &HashMap<String, String>) -> Option<String> {
 }
 
 fn tracker_of(host: &str, tr: &HashMap<String, String>) -> Option<String> {
-    let h = host.trim_start_matches('.');
-    tr.iter().find(|(dom, _)| h == **dom || h.ends_with(&format!(".{dom}")))
-        .map(|(_, org)| org.clone())
+    // Walk the host's own suffixes (a.b.example.com -> b.example.com -> example.com)
+    // doing hash lookups, instead of scanning every entry in the Radar map for each
+    // cookie — that was O(cookies x trackers) with an allocation per comparison.
+    let mut h = host.trim_start_matches('.');
+    loop {
+        if let Some(org) = tr.get(h) { return Some(org.clone()); }
+        match h.split_once('.') {
+            Some((_, rest)) if rest.contains('.') => h = rest,
+            _ => return None,
+        }
+    }
 }
 
 fn find_stores() -> Vec<(String, PathBuf)> {
@@ -65,7 +73,15 @@ fn read_chromium(db: &PathBuf) -> Vec<(String, String, i64, i32)> {
 
 pub fn run() -> anyhow::Result<()> {
     fs::create_dir_all("data").ok();
-    let trackers = load_map("data/trackers.txt");
+    // Tracker Radar lives under data/static/ (fetched by fetch-data.sh), with local
+    // overrides layered on top — same sources enrich.rs uses. Loading the wrong path
+    // here silently left tracker_org empty for every cookie.
+    let mut trackers = load_map("data/static/trackers.tsv");
+    trackers.extend(load_map("data/static/trackers_override.tsv"));
+    if trackers.is_empty() {
+        eprintln!("[panopticon] warning: no tracker data at data/static/trackers.tsv \
+                   — run ./fetch-data.sh; tracker_org will be empty");
+    }
     let ids = load_map("data/id_cookies.txt");
     let stores = find_stores();
     if stores.is_empty() { eprintln!("[panopticon] no cookie stores found"); return Ok(()); }

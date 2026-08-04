@@ -92,6 +92,12 @@ pub fn run() -> anyhow::Result<()> {
             .insert(f[1].trim_start_matches('.').to_string());
     }
 
+    if cookie_orgs.is_empty() {
+        eprintln!("[panopticon] warning: no tracker orgs in data/cookies.tsv \
+                   — run --cookies first (and ./fetch-data.sh if you have not). \
+                   Correlation results below will be empty.");
+    }
+
     // --- live network destinations (from P1), resolved via DNS then ASN ---
     let mut live_orgs: HashMap<String, HashSet<String>> = HashMap::new(); // org -> hosts/ips
     let mut silent: BTreeMap<String, (String, f64)> = BTreeMap::new();     // ip -> (comm, entropy)
