@@ -91,9 +91,15 @@ it.
   Because the fallback search walks your collections looking for the browser's
   storage entry, it can prompt for a collection unrelated to your browser. Cancel
   the prompt and the affected cookies are skipped rather than mis-decrypted.
-- **Live network flow capture** (eBPF) requires `CAP_BPF` / `CAP_NET_ADMIN`, granted
-  via the systemd unit or `setcap`. This is the only component needing elevation.
-  You can run the full cookie/PII analysis without it.
+- **Live network flow capture** (eBPF) requires three capabilities, granted by the
+  unit `install-service.sh` generates: `CAP_BPF` to load the program, `CAP_PERFMON`
+  to attach the kprobe, and `CAP_NET_ADMIN` for the network hook. The unit runs as
+  *you*, not root, with `NoNewPrivileges`, `ProtectSystem=strict` and `ProtectHome=read-only`,
+  and deliberately does **not** grant `CAP_DAC_READ_SEARCH` — that would let the
+  daemon read any file on the system, and the only thing it buys is package
+  attribution for other users' processes, which will show `?` instead.
+  This is the only component needing elevation; the full cookie/PII analysis runs
+  as a normal user without it.
 
 ## Your responsibility
 

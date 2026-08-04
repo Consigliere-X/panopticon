@@ -29,8 +29,12 @@ pub fn run() -> anyhow::Result<()> {
     std::thread::spawn(move || { let _ = crate::server::run_server(rx); });
     fs::create_dir_all("data").ok();
     let obj = "crates/ebpf/target/bpfel-unknown-none/release/panopticon-ebpf";
-    let mut bpf = Ebpf::load(&fs::read(obj)
-        .map_err(|e| anyhow::anyhow!("missing {obj}: {e}"))?)?;
+    let mut bpf = Ebpf::load(&fs::read(obj).map_err(|e| anyhow::anyhow!(
+        "cannot read the eBPF object at {obj} ({e}).\n\
+         The eBPF program is a separate cargo workspace and is NOT built by\n\
+         `cargo build --release` in the repo root. Build it with:\n\
+         \n    ./build.sh\n\n\
+         Everything except live flow capture works without it."))?)?;
     let prog: &mut KProbe = bpf.program_mut("sock_connect").unwrap().try_into()?;
     prog.load()?;
     let hook = ["security_socket_connect", "tcp_v4_connect"].iter()

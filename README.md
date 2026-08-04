@@ -12,7 +12,7 @@
 **See what trackers, cookies, and data brokers know about you — locally, in your terminal.**
 
 <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
-<img src="https://img.shields.io/badge/rust-1.75+-orange.svg" alt="Rust">
+<img src="https://img.shields.io/badge/rust-1.85+-orange.svg" alt="Rust">
 <img src="https://img.shields.io/badge/platform-linux-lightgrey.svg" alt="Platform: Linux">
 
 </div>
@@ -104,15 +104,21 @@ Panopticon is a privacy tool, so it holds itself to a privacy standard. See
 
 ## Install
 
-**Requirements:** Linux, a recent Rust toolchain, Python 3 (for setup), and a
-supported browser — **Firefox** or a **Chromium-family** browser (see Browser
-Support below). eBPF flow capture needs a recent kernel.
+**Requirements:** Linux, Rust 1.85+ (the crate uses edition 2024), Python 3 (for
+setup), and a supported browser — **Firefox** or a **Chromium-family** browser
+(see Browser Support below).
+
+Live flow capture additionally needs a recent kernel and an eBPF toolchain —
+nightly Rust with `rust-src`, plus `bpf-linker`. `build.sh` checks for these and
+tells you exactly what to install. If you don't want live capture, run
+`./build.sh --no-bpf`; everything else (cookies, PII, sync, reports) works
+without it.
 
 ```bash
 git clone https://github.com/Consigliere-X/panopticon
 cd panopticon
 ./fetch-data.sh          # fetch reference datasets (PSL, tracker map, ASN)
-cargo build --release
+./build.sh
 ```
 
 ### Browser support
@@ -162,7 +168,8 @@ watcher** (needs privileges for eBPF).
 
 ```bash
 ./target/release/panopticon --app        # main dashboard, no root required
-sudo systemctl enable --now panopticon   # optional live flow capture
+./install-service.sh                     # optional live flow capture
+sudo systemctl enable --now panopticon
 ```
 
 Inside: `Tab` switches views, arrows move, `Enter` opens details, `/` searches,
