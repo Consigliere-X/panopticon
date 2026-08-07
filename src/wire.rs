@@ -15,9 +15,17 @@ pub fn sock_bind_path() -> String {
 // Client side: CONNECT to whichever socket actually exists.
 pub fn sock_path() -> String {
     if let Ok(p) = std::env::var(SOCK_ENV) { return p; }
-    for cand in ["/run/panopticon.sock", "data/panopticon.sock"] {
+    const CANDS: [&str; 2] = ["/run/panopticon.sock", "data/panopticon.sock"];
+    // First pass: a socket we can actually CONNECT to always wins. Doing this for
+    // every candidate before falling back matters — a daemon that ran as root once
+    // leaves /run/panopticon.sock behind, and a stale-but-present socket file there
+    // would otherwise shadow the live one the current daemon bound under data/.
+    for cand in CANDS {
         if std::os::unix::net::UnixStream::connect(cand).is_ok() { return cand.into(); }
-        // exists as a socket file even if a probe connect raced?
+    }
+    // Second pass: nothing accepted a connection. Fall back to a path that at least
+    // exists as a socket, in case a probe raced the daemon's startup.
+    for cand in CANDS {
         if std::fs::metadata(cand).map(|m|
             std::os::unix::fs::FileTypeExt::is_socket(&m.file_type())).unwrap_or(false) {
             return cand.into();
