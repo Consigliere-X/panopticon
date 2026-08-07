@@ -195,16 +195,22 @@ Inside: `Tab` switches views, arrows move, `Enter` opens details, `/` searches,
 ## How it works
 
 - **Cookie analysis** reads Firefox's `cookies.sqlite` and Chromium's `Cookies`
-  DB read-only (decrypting Chromium values in memory); tracking IDs are detected
-  by fingerprint, not a blocklist, so first-party trackers show up.
+  DB read-only (decrypting Chromium values in memory). Whether a value *looks like*
+  a tracking ID is judged by its entropy, not by a blocklist, so first-party
+  trackers show up even when no list names them; *which company* set it is then
+  attributed from Tracker Radar and a small cookie-name map.
 - **Sync detection** hashes values to find the same ID across sites, attributing
   the broker via the DuckDuckGo Tracker Radar dataset + a local override list.
 - **Flow capture** uses eBPF, resolves each IP's owner against a full ip2asn
   table, and recovers hostnames via a DNS tap and reverse-DNS.
 - **Domain parsing** uses the Public Suffix List (`example.co.uk` handled right).
 
-Reference data is fetched by `fetch-data.sh` from publicsuffix.org, DuckDuckGo
-Tracker Radar, and iptoasn.com, then condensed locally.
+Reference data comes from two places. `fetch-data.sh` downloads the large sets —
+publicsuffix.org, DuckDuckGo Tracker Radar, iptoasn.com — and condenses them into
+`data/static/`. Three small curated maps ship with the repo: `owners.tsv` (which
+domains belong to one company), `categories.tsv` (what a cookie name is for) and
+`id_cookies.tsv` (known tracking identifiers). Panopticon warns at startup if any
+of them is missing rather than quietly producing a thinner answer.
 
 ---
 

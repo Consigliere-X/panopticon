@@ -50,8 +50,9 @@ order of sensitivity:
   evidence of cross-site tracking and is what the Sync Graph displays. Such
   values are tracking IDs by nature, but a shared value can still be a session
   token. Treat this file as credential-grade.
-- `reports/` — reports you export with `e`. The *redacted* variants mask values
-  and are meant to be shareable. The `*_pii_full.md` variant contains **decoded
+- `reports/` — reports you export with `e`. The *redacted* variants omit cookie
+  values entirely (they are left out, not partially masked) and are meant to be
+  shareable. The `*_pii_full.md` variant contains **decoded
   personal data in the clear** (email, name, location, device IDs) by design, so
   you can see exactly what a site holds. It is created `0600` (the mode is set at
   creation, not applied afterwards, so it is never briefly world-readable), is never
