@@ -62,12 +62,13 @@ order of sensitivity:
 *redacted* report variants, and even those list the sites you visit — read one
 before you send it.
 
-Beyond `./data/`, the live-flow daemon creates a Unix socket, at
-`/run/panopticon.sock` if it can write there, otherwise `data/panopticon.sock`
-(or `$PANOPTICON_SOCK`). Flow events carry the process name, PID, owning package,
-destination IP, port, hostname and ASN owner — a live view of your browsing. The
-socket is chowned to the project owner and set `0600`, so only that user can read
-it.
+Beyond `./data/`, the live-flow daemon creates a Unix socket. Under the unit
+`install-service.sh` generates this is `data/panopticon.sock`, because
+`ProtectSystem=strict` leaves `/run` read-only; run outside that unit (as root,
+say) it uses `/run/panopticon.sock` instead. `$PANOPTICON_SOCK` overrides both.
+Flow events carry the process name, PID, owning package, destination IP, port,
+hostname and ASN owner — a live view of your browsing. The socket is owned by the
+user running the daemon and set `0600`, so nobody else on the machine can read it.
 
 ## What it does NOT do
 
