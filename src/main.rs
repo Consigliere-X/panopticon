@@ -72,12 +72,46 @@ fn parse_dns(b: &[u8]) -> Vec<(String, String)> {
     v
 }
 
+/// Warn about reference data that is missing, before a command silently produces
+/// a thin answer. Two long-lived bugs in this project were exactly this: code read
+/// a path that nothing ever created, found nothing, and carried on — tracker
+/// attribution and ASN attribution were both dead for months without a single
+/// error message. Anything that degrades the output should say so out loud.
+fn check_reference_data() {
+    // (path, what it powers)
+    const REQUIRED: [(&str, &str); 4] = [
+        ("data/static/trackers.tsv", "tracker attribution (which company set a cookie)"),
+        ("data/static/asn_v4.tsv", "naming the company behind an IP in Flows"),
+        ("data/static/asn_v6.tsv", "naming the company behind an IPv6 address in Flows"),
+        ("data/static/public_suffix_list.dat", "grouping hosts into real sites (eTLD+1)"),
+    ];
+
+    // treat empty as missing: a truncated download is just as useless
+    let missing: Vec<&(&str, &str)> = REQUIRED
+        .iter()
+        .filter(|(p, _)| std::fs::metadata(p).map(|m| m.len() == 0).unwrap_or(true))
+        .collect();
+
+    if missing.is_empty() {
+        return;
+    }
+    eprintln!("[panopticon] reference data missing — results will be incomplete:");
+    for (path, what) in &missing {
+        eprintln!("    {path}  → {what}");
+    }
+    eprintln!("    run ./fetch-data.sh to download it, then re-run this command.\n");
+}
+
 fn main() {
     // Rust ignores SIGPIPE by default, so `panopticon --correlate | head` panics with
     // "failed printing to stdout" once head exits. Restore the Unix default: quiet exit.
     #[cfg(unix)]
     unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL); }
     let args: Vec<String> = env::args().collect();
+    // every mode below reads reference data except the self-check
+    if !args.iter().any(|a| a == "--chromium-check") {
+        check_reference_data();
+    }
     if args.iter().any(|a| a == "--chromium-check") { chromium::diagnostic().unwrap(); return; }
     if args.iter().any(|a| a == "--enrich") { enrich::run().unwrap(); return; }
     if args.iter().any(|a| a == "--sync") { sync::run().unwrap(); return; }

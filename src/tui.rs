@@ -24,33 +24,17 @@ fn load() -> State {
     let mut sites: HashMap<String, HashSet<String>> = HashMap::new();
     for l in fs::read_to_string("data/cookies.tsv").unwrap_or_default().lines().skip(1) {
         let f: Vec<&str> = l.split('\t').collect();
-        if f.len() < 5 || f[4] == "-" { continue; }
-        sites.entry(parent(f[4]).into()).or_default().insert(f[1].trim_start_matches('.').into());
+        // cookies.tsv: browser(0) host(1) name(2) tracker_org(3) id_kind(4) flags(5)
+        if f.len() < 6 || f[3] == "-" { continue; }
+        sites.entry(parent(f[3]).into()).or_default().insert(f[1].trim_start_matches('.').into());
     }
     for (o, s) in sites { jar.insert(o, s.len()); }
 
-    let asn = fs::read_to_string("data/asn_ranges.txt").unwrap_or_default();
-    let ranges: Vec<(String,u32,String)> = asn.lines().filter_map(|l| {
-        let (c,o)=l.split_once('\t')?; let (n,b)=c.split_once('/')?;
-        Some((n.into(), b.parse().ok()?, o.into())) }).collect();
-
-    let lookup = |ip: &str| -> Option<String> {
-        let v6 = ip.contains(':');
-        for (net,bits,org) in &ranges {
-            if net.contains(':') != v6 { continue; }
-            let hit = if v6 {
-                match (ip.parse::<std::net::Ipv6Addr>(), net.parse::<std::net::Ipv6Addr>()) {
-                    (Ok(a),Ok(n)) => { let (a,n)=(u128::from(a),u128::from(n));
-                        let m = if *bits==0 {0} else {u128::MAX<<(128-bits)}; (a&m)==(n&m) } _=>false }
-            } else {
-                match (ip.parse::<std::net::Ipv4Addr>(), net.parse::<std::net::Ipv4Addr>()) {
-                    (Ok(a),Ok(n)) => { let (a,n)=(u32::from(a),u32::from(n));
-                        let m = if *bits==0 {0} else {u32::MAX<<(32-bits)}; (a&m)==(n&m) } _=>false }
-            };
-            if hit { return Some(parent(org).into()); }
-        }
-        None
-    };
+    // ASN data is data/static/asn_v4.tsv + asn_v6.tsv, loaded and binary-searched by
+    // AsnDb. This used to parse a data/asn_ranges.txt that nothing ever wrote, so every
+    // lookup returned None and no flow was ever attributed to a company.
+    let asn_db = crate::asn::AsnDb::load();
+    let lookup = |ip: &str| -> Option<String> { asn_db.lookup(ip).map(|o| parent(&o).to_string()) };
 
     let flows = fs::read_to_string("data/flows.log").unwrap_or_default();
     let all: Vec<&str> = flows.lines().collect();
