@@ -1,0 +1,53 @@
+# cookie name<TAB>what kind of identifier it is
+#
+# Used by --cookies to label a cookie as a known tracking identifier. A name
+# ending in "_" is treated as a prefix match ("mp_" covers "mp_abc123_mixpanel").
+# Missing entries simply mean no label; nothing breaks.
+
+_ga	Google Analytics
+_ga_	Google Analytics
+_gid	Google Analytics
+__utma	Google Analytics
+__utmb	Google Analytics
+__utmz	Google Analytics
+_gcl_au	Google Ads
+_gcl_aw	Google Ads
+IDE	Google DoubleClick
+NID	Google
+AEC	Google
+DV	Google
+SID	Google
+HSID	Google
+SSID	Google
+APISID	Google
+SAPISID	Google
+_fbp	Meta Pixel
+_fbc	Meta Pixel
+fr	Meta
+MUID	Microsoft
+_uetsid	Microsoft Bing
+_uetvid	Microsoft Bing
+_clck	Microsoft Clarity
+_clsk	Microsoft Clarity
+_cc_id	Criteo
+cto_bundle	Criteo
+cto_dna_bundle	Criteo
+cto_criteoId	Criteo
+_pubcid	Prebid Shared ID
+_pubcid_cst	Prebid Shared ID
+unifiedid	TradeDesk
+pbjs-unifiedid	TradeDesk
+__qca	Quantcast
+_pin_unauth	Pinterest
+_pinterest_ct_ua	Pinterest
+_scid	Snap
+_ttp	TikTok
+ajs_anonymous_id	Segment
+ajs_user_id	Segment
+mp_	Mixpanel
+amplitude_id	Amplitude
+_hjSessionUser_	Hotjar
+personalization_id	X (Twitter)
+li_sugr	LinkedIn
+bcookie	LinkedIn
+UserMatchHistory	LinkedIn

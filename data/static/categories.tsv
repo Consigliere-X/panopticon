@@ -1,0 +1,105 @@
+# cookie name<TAB>Category<TAB>subtype
+#
+# Categories shown in the Cookies tab. A name ending in "_" or starting with "__"
+# is treated as a prefix match, so "_ga_" covers "_ga_ABC123".
+# Anything not listed falls back to a shape heuristic in enrich.rs, so this file
+# improves accuracy but is never required.
+#
+# Categories in use: Advertising, Identifier, Behavior, Session, Security,
+# Consent, Preference.
+
+# ── Advertising ────────────────────────────────────────────────────────────
+IDE	Advertising	ad-id
+NID	Advertising	google-prefs
+AEC	Advertising	google-prefs
+DV	Advertising	google-prefs
+test_cookie	Advertising	ad-check
+_gcl_	Advertising	google-ads-click
+_fbp	Advertising	meta-pixel
+_fbc	Advertising	meta-click
+fr	Advertising	meta-ad-id
+_cc_id	Advertising	criteo-id
+cto_	Advertising	criteo
+_ttp	Advertising	tiktok-pixel
+_tt_enable_cookie	Advertising	tiktok
+_scid	Advertising	snap-id
+_schn	Advertising	snap
+__qca	Advertising	quantcast
+_pin_unauth	Advertising	pinterest
+_pinterest_ct_ua	Advertising	pinterest
+MUID	Advertising	microsoft-ad-id
+_uetsid	Advertising	bing-uet
+_uetvid	Advertising	bing-uet
+personalization_id	Advertising	x-ads
+
+# ── Identifier (cross-site IDs) ────────────────────────────────────────────
+_ga	Identifier	google-analytics
+_ga_	Identifier	google-analytics
+_gid	Identifier	google-analytics
+__utma	Identifier	google-analytics-legacy
+_pubcid	Identifier	prebid-shared-id
+_pubcid_cst	Identifier	prebid-shared-id
+unifiedid	Identifier	tradedesk
+pbjs-unifiedid	Identifier	prebid-tradedesk
+ajs_anonymous_id	Identifier	segment
+ajs_user_id	Identifier	segment
+mp_	Identifier	mixpanel
+amplitude_id	Identifier	amplitude
+_hjSessionUser_	Identifier	hotjar
+_clck	Identifier	microsoft-clarity
+_clsk	Identifier	microsoft-clarity
+
+# ── Behavior ───────────────────────────────────────────────────────────────
+_hjSession_	Behavior	hotjar-session
+_hjIncludedInSessionSample	Behavior	hotjar
+_dc_gtm_	Behavior	tag-manager
+_gat	Behavior	analytics-throttle
+__hstc	Behavior	hubspot
+hubspotutk	Behavior	hubspot
+_uetmsclkid	Behavior	bing
+
+# ── Session / login ────────────────────────────────────────────────────────
+sessionid	Session	session
+PHPSESSID	Session	session
+JSESSIONID	Session	session
+ASP.NET_SessionId	Session	session
+connect.sid	Session	session
+_session_id	Session	session
+csrftoken	Session	csrf
+XSRF-TOKEN	Session	csrf
+__Secure-	Session	secure-session
+__Host-	Session	host-session
+SID	Session	google-session
+HSID	Session	google-session
+SSID	Session	google-session
+APISID	Session	google-session
+SAPISID	Session	google-session
+LOGIN_INFO	Session	youtube-login
+
+# ── Security / bot protection ──────────────────────────────────────────────
+cf_clearance	Security	cloudflare-challenge
+__cf_bm	Security	cloudflare-bot
+__cflb	Security	cloudflare-lb
+_cfuvid	Security	cloudflare
+ak_bmsc	Security	akamai-bot
+bm_sv	Security	akamai-bot
+bm_sz	Security	akamai-bot
+_abck	Security	akamai-bot
+incap_ses_	Security	imperva
+visid_incap_	Security	imperva
+datadome	Security	datadome
+
+# ── Consent ────────────────────────────────────────────────────────────────
+euconsent-v2	Consent	iab-tcf
+CookieConsent	Consent	consent
+OptanonConsent	Consent	onetrust
+OptanonAlertBoxClosed	Consent	onetrust
+cookieyes-consent	Consent	cookieyes
+usprivacy	Consent	ccpa
+
+# ── Preference ─────────────────────────────────────────────────────────────
+PREF	Preference	preferences
+NEXT_LOCALE	Preference	locale
+theme	Preference	theme
+timezone	Preference	timezone
+i18n_redirected	Preference	locale

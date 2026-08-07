@@ -4,6 +4,8 @@ use walkdir::WalkDir;
 
 fn load_map(path: &str) -> HashMap<String, String> {
     fs::read_to_string(path).unwrap_or_default().lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .filter_map(|l| l.split_once('\t'))
         .map(|(k, v)| (k.to_string(), v.to_string())).collect()
 }
@@ -82,7 +84,10 @@ pub fn run() -> anyhow::Result<()> {
         eprintln!("[panopticon] warning: no tracker data at data/static/trackers.tsv \
                    — run ./fetch-data.sh; tracker_org will be empty");
     }
-    let ids = load_map("data/id_cookies.txt");
+    // Shipped seed first, then any local data/id_cookies.txt as an override, so a
+    // fresh clone gets useful labels instead of silently having none.
+    let mut ids = load_map("data/static/id_cookies.tsv");
+    ids.extend(load_map("data/id_cookies.txt"));
     let stores = find_stores();
     if stores.is_empty() { eprintln!("[panopticon] no cookie stores found"); return Ok(()); }
 

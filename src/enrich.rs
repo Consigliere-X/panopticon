@@ -220,11 +220,18 @@ pub fn run()->anyhow::Result<()>{
     let psl=load_psl();
     let trackers=load_trackers();
     if psl.is_none(){ eprintln!("[panopticon] warning: PSL not found, using naive eTLD+1"); }
-    let cats:HashMap<String,(String,String)> = fs::read_to_string("data/categories.txt")
-        .unwrap_or_default().lines().filter_map(|l|{
+    // Shipped seed first, then any local data/categories.txt as an override.
+    let parse_cats=|path:&str|->Vec<(String,(String,String))>{
+        fs::read_to_string(path).unwrap_or_default().lines().filter_map(|l|{
+            let l=l.trim();
+            if l.is_empty()||l.starts_with('#'){ return None; }
             let p:Vec<&str>=l.split('\t').collect();
             if p.len()>=3 {Some((p[0].to_string(),(p[1].to_string(),p[2].to_string())))} else {None}
-        }).collect();
+        }).collect()
+    };
+    let mut cats:HashMap<String,(String,String)> =
+        parse_cats("data/static/categories.tsv").into_iter().collect();
+    cats.extend(parse_cats("data/categories.txt"));
 
     // pass 1: gather value hashes for sync detection
     let mut val_hosts:HashMap<String,std::collections::HashSet<String>>=HashMap::new();
