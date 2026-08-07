@@ -296,8 +296,26 @@ pub fn find_stores() -> Vec<Store> {
                     && is_sqlite(p)
                     && seen.insert(p.to_path_buf())
                 {
+                    // Qualify the label with the profile directory when it is not the
+                    // default one, so "chromium" and "chromium:Profile 1" stay distinct.
+                    // Without this, two profiles of the same browser are indistinguishable
+                    // in the UI and a live value lookup returns whichever profile is
+                    // found first.
+                    let mut prof = p.parent();
+                    if prof.and_then(|d| d.file_name()).and_then(|n| n.to_str()) == Some("Network") {
+                        prof = prof.and_then(|d| d.parent());
+                    }
+                    let pname = prof
+                        .and_then(|d| d.file_name())
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("Default");
+                    let label = if pname == "Default" || pname == browser {
+                        browser.to_string()
+                    } else {
+                        format!("{browser}:{pname}")
+                    };
                     out.push(Store {
-                        browser: browser.into(),
+                        browser: label,
                         app_attr: app.into(),
                         path: p.to_path_buf(),
                     });

@@ -288,6 +288,8 @@ fn window(sel:usize, voff:&mut usize, total:usize, height:usize)->usize{
 
 // Stable colour per browser so the source is readable at a glance.
 fn browser_color(b:&str)->Color{
+    // labels may be profile-qualified ("chromium:Profile 1"); colour by the browser
+    let b = b.split(':').next().unwrap_or(b);
     match b {
         "firefox"=>Color::Rgb(255,149,0),
         "chrome"|"chrome-beta"|"chrome-dev"=>Color::Rgb(66,133,244),
@@ -333,7 +335,9 @@ fn fetch_value(host:&str, name:&str, browser:&str)->String{
 }
 
 fn cookie_key(c:&Cookie)->String{
-    format!("{}|{}",c.host,c.name)
+    // Include the browser: the same host+name holds DIFFERENT values in Firefox and
+    // Chromium, so a browser-blind key would show one browser's decode for the other.
+    format!("{}|{}|{}",c.browser,c.host,c.name)
 }
 
 fn deep_decode(v:&str)->Vec<(String,bool)>{
@@ -919,7 +923,7 @@ fn draw_datatypes(f:&mut Frame,a:Rect,app:&mut App){
 }
 
 fn draw_sync(f:&mut Frame,a:Rect,app:&mut App){
-    struct Cluster{ doms:Vec<String>, cookie:String, org:String, preview:String, host:String, entropy:String }
+    struct Cluster{ doms:Vec<String>, cookie:String, org:String, preview:String, host:String, entropy:String, same_owner:bool }
     let mut clusters:Vec<Cluster> = std::fs::read_to_string("data/sync_clusters.tsv")
         .unwrap_or_default().lines().filter_map(|l|{
             let f:Vec<&str>=l.split("\t").collect();
@@ -931,9 +935,11 @@ fn draw_sync(f:&mut Frame,a:Rect,app:&mut App){
                 org:f.get(3).unwrap_or(&"?").to_string(),
                 preview:f.get(4).unwrap_or(&"?").to_string(),
                 host:f.get(5).unwrap_or(&"?").to_string(),
-                entropy:f.get(6).unwrap_or(&"?").to_string() })
+                entropy:f.get(6).unwrap_or(&"?").to_string(),
+                same_owner:f.get(7).map(|k|*k=="SAME-OWNER").unwrap_or(false) })
         }).collect();
-    clusters.sort_by(|a,b| b.doms.len().cmp(&a.doms.len())
+    clusters.sort_by(|a,b| a.same_owner.cmp(&b.same_owner)
+        .then(b.doms.len().cmp(&a.doms.len()))
         .then(a.doms.join(",").cmp(&b.doms.join(",")))
         .then(a.cookie.cmp(&b.cookie)));
     let org_color=|o:&str| match o {
@@ -959,15 +965,22 @@ fn draw_sync(f:&mut Frame,a:Rect,app:&mut App){
                 Line::from(vec![Span::styled("  category: ",Style::new().fg(Color::Yellow)),
                     Span::styled(format!("{}",cat),Style::new().fg(cat_color(cat))),
                     Span::styled(format!("   entropy {}",cl.entropy),Style::new().fg(Color::DarkGray))]),
-                Line::from(vec![Span::styled("  broker:  ",Style::new().fg(Color::Yellow)),
-                    Span::styled(cl.org.clone(),Style::new().fg(oc).bold())]),
+                Line::from(vec![Span::styled(if cl.same_owner {"  owner:   "} else {"  broker:  "},
+                        Style::new().fg(Color::Yellow)),
+                    Span::styled(cl.org.clone(),Style::new().fg(oc).bold()),
+                    Span::styled(if cl.same_owner {"   (same owner — these are all this company's own sites)"} else {""},
+                        Style::new().fg(Color::Green))]),
                 Line::from(""),
                 Line::from(Span::styled("  SHARED VALUE (full):",Style::new().fg(Color::LightRed).bold())),
                 Line::from(Span::styled(cl.preview.clone(),Style::new().fg(Color::White))),
                 Line::from(""),
                 Line::from(vec![Span::styled("  this exact value lives on all of these sites — ",Style::new().fg(Color::Gray)),
                     Span::styled(cl.org.clone(),Style::new().fg(oc).bold()),
-                    Span::styled(" can join your activity across them:",Style::new().fg(Color::Gray))]),
+                    Span::styled(if cl.same_owner {
+                            " already knows they are one visit; these are its own domains:"
+                        } else {
+                            " can join your activity across them:"
+                        },Style::new().fg(Color::Gray))]),
                 Line::from(""),
             ];
             for (j,d) in cl.doms.iter().enumerate(){
@@ -988,8 +1001,13 @@ fn draw_sync(f:&mut Frame,a:Rect,app:&mut App){
 
     // LIST view: hub-and-spoke, one selectable line per cluster
     let mut lines=vec![
-        Line::from(Span::styled("  broker sync — Enter a cluster to see the shared value + which sites feed it",
-            Style::new().fg(Color::Magenta).bold())),
+        Line::from(vec![
+            Span::styled("  shared identifiers — ",Style::new().fg(Color::Magenta).bold()),
+            Span::styled("unrelated parties first",Style::new().fg(Color::Red).bold()),
+            Span::styled(", then a company's own sites (",Style::new().fg(Color::Magenta).bold()),
+            Span::styled("same owner",Style::new().fg(Color::Yellow).bold()),
+            Span::styled("). Enter for detail.",Style::new().fg(Color::Magenta).bold()),
+        ]),
         Line::from(""),
     ];
     let h=(a.height.saturating_sub(4)) as usize;
@@ -1007,6 +1025,9 @@ fn draw_sync(f:&mut Frame,a:Rect,app:&mut App){
             Span::styled(format!("= {}",
                 {let v=&cl.preview; if v.len()>28{format!("{}…",&v[..28])}else{v.clone()}}),
                 Style::new().fg(Color::Gray)),
+            // say it outright: colour alone left these looking like broker linkage
+            Span::styled(if cl.same_owner {"  · same owner"} else {"  · unrelated sites"},
+                Style::new().fg(if cl.same_owner {Color::Yellow} else {Color::Red})),
         ]));
         for (j,d) in cl.doms.iter().enumerate(){
             let br=if j+1==cl.doms.len(){"      └──"}else{"      ├──"};

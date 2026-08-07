@@ -301,7 +301,11 @@ pub fn run()->anyhow::Result<()>{
                 else if name.starts_with("_ga")||name.starts_with("_gcl")||name=="NID"||name=="IDE"{"Google".into()}
                 else if name.starts_with("_fbp")||name=="fr"{"Meta".into()}
                 else if name.starts_with("MUID")||name.starts_with("_uet"){"Microsoft".into()}
-                else {"unknown-broker".into()}
+                // Before giving up, ask the owner map: a value shared across one
+                // company's own domains has a perfectly good name, and calling
+                // OpenAI an "unknown broker" is the same overclaim in miniature.
+                else if let Some(o)=owners_map.get(&etld1_psl(&host,&psl)) { o.clone() }
+                else {"unknown".into()}
             });
             val_meta.entry(hh.clone()).or_insert_with(|| (name.clone(), org.clone()));
             hh
@@ -373,8 +377,12 @@ pub fn run()->anyhow::Result<()>{
             let prev=val_preview.get(h).cloned().unwrap_or("?".into())
                 .replace('\t'," ").replace('\n'," ").replace('\r'," ");
             let (dhost,dent)=val_detail.get(h).cloned().unwrap_or(("?".into(),0.0));
-            writeln!(cl,"{}\t{}\t{}\t{}\t{}\t{}\t{:.1}", &h[..12],
-                d.iter().map(|x|x.as_str()).collect::<Vec<_>>().join(","), cookie, org, prev, dhost, dent)?;
+            // 8th column: SAME-OWNER clusters are one company's own sites, not a
+            // broker linking unrelated parties. Without this the Sync Graph would
+            // present both identically, which is the overclaim we removed elsewhere.
+            let kind=if same_owner.contains(h){"SAME-OWNER"}else{"SYNCED"};
+            writeln!(cl,"{}\t{}\t{}\t{}\t{}\t{}\t{:.1}\t{}", &h[..12],
+                d.iter().map(|x|x.as_str()).collect::<Vec<_>>().join(","), cookie, org, prev, dhost, dent, kind)?;
         }
     }
     let mut pf=fs::File::create("data/sync_partners.tsv")?;

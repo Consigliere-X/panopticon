@@ -79,7 +79,11 @@ it.
   to a hostname via `getent hosts`. Those queries go to whatever resolver your
   system is configured to use, so that resolver learns which IPs you are asking
   about — the same IPs you are already connecting to. Results are cached in
-  memory. Skip the Flows tab if you do not want these lookups made.
+  memory. These lookups are made by the `--watch` daemon as flows arrive, not by
+  the Flows tab (which only displays what the daemon already resolved) — so
+  opening or avoiding that tab changes nothing. To stop them, do not run the
+  daemon (`sudo systemctl stop panopticon`). The cookie, PII and sync analysis
+  never performs them.
 - Does not modify your cookies, browser state, or keyring. All browser reads are
   `immutable=1`; the keyring is read-only.
 - Does not persist decrypted cookie values except in the two cases named above
