@@ -92,14 +92,32 @@ fn check_reference_data() {
         .filter(|(p, _)| std::fs::metadata(p).map(|m| m.len() == 0).unwrap_or(true))
         .collect();
 
-    if missing.is_empty() {
-        return;
+    // Shipped with the repo rather than downloaded, so a missing one means the
+    // checkout is damaged — different fix, hence a separate list and message.
+    const SHIPPED: [(&str, &str); 3] = [
+        ("data/static/owners.tsv", "telling a company's own sites apart from broker linkage"),
+        ("data/static/categories.tsv", "naming what each cookie is for"),
+        ("data/static/id_cookies.tsv", "recognising known tracking identifiers"),
+    ];
+    let missing_shipped: Vec<&(&str, &str)> = SHIPPED
+        .iter()
+        .filter(|(p, _)| std::fs::metadata(p).map(|m| m.len() == 0).unwrap_or(true))
+        .collect();
+
+    if !missing.is_empty() {
+        eprintln!("[panopticon] reference data missing — results will be incomplete:");
+        for (path, what) in &missing {
+            eprintln!("    {path}  → {what}");
+        }
+        eprintln!("    run ./fetch-data.sh to download it, then re-run this command.\n");
     }
-    eprintln!("[panopticon] reference data missing — results will be incomplete:");
-    for (path, what) in &missing {
-        eprintln!("    {path}  → {what}");
+    if !missing_shipped.is_empty() {
+        eprintln!("[panopticon] data shipped with the repo is missing — results will be incomplete:");
+        for (path, what) in &missing_shipped {
+            eprintln!("    {path}  → {what}");
+        }
+        eprintln!("    restore it with: git checkout -- data/static/\n");
     }
-    eprintln!("    run ./fetch-data.sh to download it, then re-run this command.\n");
 }
 
 fn main() {

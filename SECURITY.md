@@ -58,6 +58,10 @@ order of sensitivity:
   produced unless you explicitly choose the full variant, and should not be
   shared or committed.
 
+`fetch-data.sh` also writes its downloads to `/tmp` while unpacking them
+(`/tmp/ddg.json`, `/tmp/asn4.gz`, `/tmp/asn6.gz`). Those are public reference
+datasets, not anything of yours.
+
 **Do not commit any of these files.** The only ones intended for sharing are the
 *redacted* report variants, and even those list the sites you visit — read one
 before you send it.

@@ -103,8 +103,8 @@ Panopticon is a privacy tool, so it holds itself to a privacy standard. See
   full PII report contains decoded personal data if you explicitly export one.
 - Your browsing logs stay local and are git-ignored.
 - **No telemetry.** Your cookies, browsing history and personal data never
-  leave your machine. Reverse-DNS lookups in the Flows tab do query your
-  system resolver — see [SECURITY.md](SECURITY.md).
+  leave your machine. The `--watch` daemon does send reverse-DNS lookups to your
+  system resolver to name the IPs it sees — see [SECURITY.md](SECURITY.md).
 - Reads are read-only — Panopticon never modifies your browser.
 
 ---
